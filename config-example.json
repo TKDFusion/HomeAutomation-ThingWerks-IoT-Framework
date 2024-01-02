@@ -1,0 +1,37 @@
+{
+    "webDiag": true,
+    "webDiagPort": 200,
+    "workingDir": "/apps/ha/",
+    "homeAssistant": {
+        "enable": true,
+        "legacyAPI": false,
+        "address": "10.10.1.249",
+        "port": 8123,
+        "token": "myToken",
+        "log": {
+            "espDisconnect": false
+        }
+    },
+    "telegram": {
+        "enable": true,
+        "password": "password",
+        "logLevel": 2,
+        "logDebug": true,
+        "token": "myToken",
+        "user": [
+            {
+                "user": "Daren Lee",
+                "id": 6176063468
+            }
+        ]
+    },
+    "esp": {
+        "enable": true,
+        "devices": [
+            {
+                "ip": "10.10.17.4",
+                "key": "myKey"
+            }
+        ]
+    }
+}
