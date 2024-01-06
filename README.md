@@ -14,14 +14,18 @@ Ready made industrial TW-Client automations will be included here in this repo.
 TW-Core maintains all of the communication, management and system functions. The TW-Client contains just the bare minimum code to communicate with the Core and is the intended location to put your automation(s) code. It has been designed this way to increase reliability, simplicity and streamline the deployment of future enhancements. 
 
 ### Relationship with Home Assistant:
-Home Assistant is not required but is fully supported. HA is intended to be used as monitoring and remote control agent for ThingWerks because of its smart-phone app and powerful GUI. It can also function as a Zigbee Gateway because ZHA and Zigbee2MQTT are not yet directly supported in TW. 
+This framework utilizes Home Assistant's robust GUI, smartphone app, and monitoring capabilities for NodeJS automations, offering a more reliable, flexible, and responsive approach than relying on Home Assistant for complex tasks. Coding basic logic in JavaScript is argued to be simpler than using the GUI or YAML.
 
-This framework can leverage HA's powerful GUI, Smartphone app and monitoring capabilities for you own NodeJS automations. To use NodeJS for the heavy lifting, data manipulation and communication. This is a lot more reliable, flexable and responsive than using Home Assistant for such complex tasks. Id also argue that its a lot simpler to code a basic logic in JS than it is using the GUI or YAML provided foundation is there.
+While Home Assistant excels in certain scenarios, it is unsuitable for industrial applications, where malfunctions can cause costly equipment damage. Managing data within Home Assistant is challenging, with slow responsiveness to inputs and significant lag. Despite these challenges, Home Assistant serves well as a monitoring and control mechanism within the framework.
 
-Home Assistant isn't suitable for industrial applications or where malfunctions can lead to costly equipment damage. Furthermore, data manipulation and management is very cumbersome and difficult if its even possible at all. The state management for certain conditions like startup, power loss, errors and other likely conditions is difficult to understand and control in HA, its also very slow to react to inputs and has huge lag. Withstanding, HA has a very nice GUI and it works very well as a monitoring and control mechanism in the scheme of this framework.
+In more complex environments with multiple sensors and outputs, Home Assistant falls short. NodeJS proves more suitable, handling intricacies with reliability and efficiency.
 
-Though Home Assistant may be reliable for some situations, using it for complex environments with multiple flow meters, pressure sensors, large motors and a multitude of inputs and outputs of that sort; it is simply not up to the task but NodeJS can do this easily.
+###Compactness and Resource Efficiency:
 
+The TW IoT with Home Assistant (HA) solution is highly compact and resource-efficient, especially with Home Assistant Core, which operates stably with just 500MB of RAM—unlike Home Assistant Supervised. During testing, Home Assistant Supervised consistently crashed with 1GB of RAM. The ESP Home web interface easily installs alongside HA Core, creating an efficient platform for modest IoT devices with 1GB of RAM.
+
+A key point is the remarkable responsiveness of the HA Core API, averaging 2-5ms with no timeouts. In contrast, Home Assistant Supervised can exhibit latency exceeding 100ms, occasionally becoming completely unreachable or crashing, likely due to resource-intensive background updates. Thus, using Home Assistant Supervised for reliable, time-critical operations is strongly advised against.
+It's worth mentioning that the TW IoT with Home Assistant (HA) solution is highly compact and resource-efficient, particularly when running Home Assistant Core. A mere 500MB of RAM is sufficient for stable operation—an aspect not applicable to Home Assistant Supervised. During testing, while executing all automations, Home Assistant Supervised consistently crashed with just 1GB of RAM. The ESP Home web interface seamlessly installs alongside HA Core, creating a tiny yet efficient platform that performs exceptionally well on modest IoT devices with a mere 1GB of RAM.
 
 ### General Features
 * Has very stable power and network loss recovery 
