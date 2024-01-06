@@ -2,6 +2,7 @@
     "webDiag": true,
     "webDiagPort": 200,
     "workingDir": "/apps/tw/",
+    "debugging": true,
     "telegram": {
         "enable": false,
         "remote": true,
