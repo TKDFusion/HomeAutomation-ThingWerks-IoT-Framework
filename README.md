@@ -1,6 +1,6 @@
 *If you have a question, please just open a dialog in the “issue” section so others can benefit from the discussion.*
 
-*This project is interested in collaborating with the integration of the Zigbee2mqtt NodeJS API* https://www.npmjs.com/package/zigbee2mqtt 
+*This project is interested in collaborating with integration of the Zigbee2mqtt NodeJS API* https://www.npmjs.com/package/zigbee2mqtt 
 
 ### Preamble:
 Even if you don't require Home Assistant, Telegram, or ESPHome integration, this framework provides essential features such as UDP communications, a debugging website, timer functions, logging, notifications, a service installer, and straightforward management of both volatile and non-volatile memory storage.
