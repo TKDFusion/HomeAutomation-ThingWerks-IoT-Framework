@@ -11,7 +11,7 @@ ThingWerks is an ultra-lightweight IoT Automation Framework for NodeJS, intended
 Ready made industrial TW-Client automations will be included here in this repo such as PumperPro
 
 ### Design Principals:
-TW-Core maintains all of the communication, management and system functions. The TW-Client contains just the bare minimum code to communicate with the Core and is the intended location to put your automation(s) code. It has been designed this way to increase reliability, simplicity and streamline the deployment of future enhancements. 
+TW-Core serves as the central hub for handling communication, system management, and overall system functions. On the other hand, the TW-Client is purposefully streamlined, containing only essential code to communicate with the Core, making it the designated space for your automation code. This intentional separation is crafted to enhance system reliability and simplicity. By compartmentalizing responsibilities, this design choice facilitates a more straightforward deployment of future enhancements, ensuring an efficient and robust framework for automation development.
 
 ### Relationship with Home Assistant:
 This framework utilizes Home Assistant's robust GUI, smartphone app, and monitoring capabilities for NodeJS automations, offering a more reliable, flexible, and responsive approach than relying on Home Assistant for complex tasks. Coding basic logic in JavaScript is argued to be simpler than using the GUI or YAML.
