@@ -20,7 +20,7 @@ While Home Assistant excels in certain scenarios, it is unsuitable for industria
 
 In more complex environments with multiple sensors and outputs, Home Assistant falls short. NodeJS proves more suitable, handling intricacies with reliability and efficiency.
 
-###Compactness and Resource Efficiency (TW together with HA Core):
+### Compactness and Resource Efficiency (TW together with HA Core):
 
 The TW IoT with Home Assistant (HA) solution is highly compact and resource-efficient, especially with Home Assistant Core, which operates stably with just 500MB of RAM—unlike Home Assistant Supervised. During testing, Home Assistant Supervised consistently crashed with 1GB of RAM. The ESP Home web interface easily installs alongside HA Core, creating an efficient platform for modest IoT devices with 1GB of RAM.
 
