@@ -22,8 +22,8 @@
    * Configure ESP devices
      * One object per device containing object and krey.
 2) Run the TW-Core and review avaiable entities
-   * http://127.0.0.1:20000/ha (or whatever port you specified in config.webDiagPoort)
-   * these are the exact Home Assistant Entity names available for use in the TW-Client
+   * Review Home Assistant entities http://127.0.0.1:20000/ha (or whatever port you specified in config.webDiagPoort). These are the Home Assistant Entity names available for use in the TW-Client.
+   * You can check the ESP Home devices that were discovered at http://127.0.0.1:20000/esp
 
 ### Setup TW-Client and build your automation:
 1) 
