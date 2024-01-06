@@ -1,7 +1,7 @@
 #!/usr/bin/node
 let
     cfg = {
-        autoName: "NewAutomation",
+        moduleName: "NewClientModule",
         telegram: {
             password: "password",
         },
