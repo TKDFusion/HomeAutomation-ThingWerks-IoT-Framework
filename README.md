@@ -3,12 +3,12 @@
 *This project is interested in collaborating with the integration of the Zigbee2mqtt NodeJS API* https://www.npmjs.com/package/zigbee2mqtt 
 
 ### Preamble:
-If you need neither Home Assistant, Telegram nor ESPHome then this framework still offers UDP communications,  debugging website, timer functions, logging, notification, service installer and easy volatile and non-volatile memory storage. 
+Even if you don't require Home Assistant, Telegram, or ESPHome integration, this framework provides essential features such as UDP communications, a debugging website, timer functions, logging, notifications, a service installer, and straightforward management of both volatile and non-volatile memory storage.
 
 ### General Concept of ThingWerks:
-This is an ultra lightweight IoT Automation Framework for NodeJS. It's purpose is to get you up and running with a basic automation platform quickly. It is intended for use with industrial as well as home automation projects. 
+ThingWerks is an ultra-lightweight IoT Automation Framework for NodeJS, intended to enable users to swiftly create automation scripts in NodeJS. Tailored for both industrial and home automation projects, its primary goal is to expedite the setup of a basic automation system.
 
-Ready made industrial TW-Client automations will be included here in this repo.
+Ready made industrial TW-Client automations will be included here in this repo such as PumperPro
 
 ### Design Principals:
 TW-Core maintains all of the communication, management and system functions. The TW-Client contains just the bare minimum code to communicate with the Core and is the intended location to put your automation(s) code. It has been designed this way to increase reliability, simplicity and streamline the deployment of future enhancements. 
@@ -20,7 +20,7 @@ While Home Assistant excels in certain scenarios, it is unsuitable for industria
 
 In more complex environments with multiple sensors and outputs, Home Assistant falls short. NodeJS proves more suitable, handling intricacies with reliability and efficiency.
 
-###Compactness and Resource Efficiency:
+###Compactness and Resource Efficiency (TW together with HA Core):
 
 The TW IoT with Home Assistant (HA) solution is highly compact and resource-efficient, especially with Home Assistant Core, which operates stably with just 500MB of RAM—unlike Home Assistant Supervised. During testing, Home Assistant Supervised consistently crashed with 1GB of RAM. The ESP Home web interface easily installs alongside HA Core, creating an efficient platform for modest IoT devices with 1GB of RAM.
 
