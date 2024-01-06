@@ -25,7 +25,6 @@ In more complex environments with multiple sensors and outputs, Home Assistant f
 The TW IoT with Home Assistant (HA) solution is highly compact and resource-efficient, especially with Home Assistant Core, which operates stably with just 500MB of RAM—unlike Home Assistant Supervised. During testing, Home Assistant Supervised consistently crashed with 1GB of RAM. The ESP Home web interface easily installs alongside HA Core, creating an efficient platform for modest IoT devices with 1GB of RAM.
 
 A key point is the remarkable responsiveness of the HA Core API, averaging 2-5ms with no timeouts. In contrast, Home Assistant Supervised can exhibit latency exceeding 100ms, occasionally becoming completely unreachable or crashing, likely due to resource-intensive background updates. Thus, using Home Assistant Supervised for reliable, time-critical operations is strongly advised against.
-It's worth mentioning that the TW IoT with Home Assistant (HA) solution is highly compact and resource-efficient, particularly when running Home Assistant Core. A mere 500MB of RAM is sufficient for stable operation—an aspect not applicable to Home Assistant Supervised. During testing, while executing all automations, Home Assistant Supervised consistently crashed with just 1GB of RAM. The ESP Home web interface seamlessly installs alongside HA Core, creating a tiny yet efficient platform that performs exceptionally well on modest IoT devices with a mere 1GB of RAM.
 
 ### General Features
 * Has very stable power and network loss recovery 
