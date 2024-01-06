@@ -6,7 +6,7 @@ This is an ultra lightweight IoT Automation Framework for NodeJS. It's purpose i
 Ready made industrial TW-Client automations will be included here in this repo.
 
 #### Design Principals
-TW-Core houses all of the communication, management and system functions. The TW-client contains just the bare minimum code to communicate with the Core and is the intended location to put your automation(s) code. It has been designed this way to increase reliability, simplicity and streamline the deplyment of future enhancements. 
+TW-Core maintains all of the communication, management and system functions. The TW-Client contains just the bare minimum code to communicate with the Core and is the intended location to put your automation(s) code. It has been designed this way to increase reliability, simplicity and streamline the deplyment of future enhancements. 
 
 #### Relationship with Home Assistant
 
