@@ -714,7 +714,8 @@ if (isMainThread) {
         };
     sys.boot(0);
     function log(...buf) { sys.log(...buf) }
-} else {
+}
+if (!isMainThread) {
     const data = workerData;
     if (data.threadId === "ESP") {
         let espClient = [],
@@ -829,8 +830,8 @@ if (isMainThread) {
                 case "config":
                     cfg = data.obj;
                     log("ESP Discovery initiated...", 2);
-                    Discovery().then(results => { 
-                        state.esp.discover = results; 
+                    Discovery().then(results => {
+                        state.esp.discover = results;
                         parentPort.postMessage({ type: "espState", obj: state.esp });
                     });
                     log("ESP connections initiating...", 2);
