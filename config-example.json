@@ -1,7 +1,7 @@
 {
     "webDiag": true,
     "webDiagPort": 200,
-    "workingDir": "/apps/ha/",
+    "workingDir": "/apps/tw/",
     "telegram": {
         "enable": false,
         "remote": true,
