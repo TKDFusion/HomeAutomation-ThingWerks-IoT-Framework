@@ -24,7 +24,7 @@ Home Assistant does not provide an acceptable level of reliability for use in in
 * Has a nice and easy to use logging function
 * Has systemD service creator
 
-### Home Assistan Features
+### Home Assistant Features
 * TW IoT completely removes all need for automation logic and control in Home Assistant
 * This framework is immune to network interruptions with HA
 * Has full support for HA Websocket API
