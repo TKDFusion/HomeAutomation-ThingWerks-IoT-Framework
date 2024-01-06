@@ -15,5 +15,15 @@
    * npm install homeassistant
 4) Download tw-core.js, tw-client.js and config example and place into your app directory
 
-### Set configurations for TW-Core and first run
+### Setup configurations for TW-Core and first run
 1) Modify the config-example.js and save as/rename to config
+   * Configure Home Assistant Perameters:
+     * one object {} for each HA server containing: enable, address, port etc.
+   * Configure ESP devices
+     * One object per device containing object and krey.
+2) Run the TW-Core and review avaiable entities
+   * http://127.0.0.1:20000/ha (or whatever port you specified in config.webDiagPoort)
+   * these are the exact Home Assistant Entity names available for use in the TW-Client
+
+### Setup TW-Client and build your automation:
+1) 
