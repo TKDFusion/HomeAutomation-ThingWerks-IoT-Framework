@@ -5,7 +5,7 @@
 ## What is ThingWerks?
 
 #### General Concept
-This is an ultra lightweight IoT Automation Framework for NodeJS. It's purpose is to get you up and running with a basic automation platform quickely but not have anuthing more than the basics. This is intended for use with industrial as well as homee automation projects. 
+This is an ultra lightweight IoT Automation Framework for NodeJS. It's purpose is to get you up and running with a basic automation platform quickely with only the basics. This is intended for use with industrial as well as homee automation projects. 
 
 #### Design Principals
 TW-Core houses all of the communication, management and system functions. The TW-client contains just the bare minimum code to communicate with the Core and is the intended location to put your automation(s) code. It has been designed this way to increase reliability, simplicity and streamline the deplyment of future enhancements. 
