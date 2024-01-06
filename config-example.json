@@ -2,6 +2,19 @@
     "webDiag": true,
     "webDiagPort": 200,
     "workingDir": "/apps/ha/",
+    "telegram": {
+        "enable": false,
+        "remote": true,
+        "logLevel": 2,
+        "logDebug": true,
+        "token": "myToken",
+        "user": [
+            {
+                "user": "Test User",
+                "id": 1234567890
+            }
+        ]
+    },
     "homeAssistant": [
         {
             "enable": true,
@@ -14,20 +27,6 @@
             }
         }
     ],
-    "telegram": {
-        "enable": false,
-        "remote": true,
-        "password": "test",
-        "logLevel": 2,
-        "logDebug": true,
-        "token": "myToken",
-        "user": [
-            {
-                "user": "Test User",
-                "id": 1234567890
-            }
-        ]
-    },
     "esp": {
         "enable": true,
         "devices": [
