@@ -1,4 +1,4 @@
-### If using Home Assistant oe ESPHome:
+### If using Home Assistant or ESPHome:
 1) Install Home Asistant (Core) and or ESP Home https://github.com/thwerks/ThingWerks-IoT-Frmework/blob/main/Readme-install-ha-esphome.md
 2) Generate API Token if you're using Home Assistant 
    * ![image](https://github.com/thwerks/ThingWerks-IoT-Frmework/assets/90361336/21f55ad6-c04d-46f6-bc50-7252fa84eb8c)
@@ -17,11 +17,11 @@
 
 ### Setup configurations for TW-Core and first run
 1) Modify the config-example.js and save as/rename to config.json, it must go in the same directory at th-core.js
-   * Configure Home Assistant Perameters:
+   * Configure Home Assistant Parameters:
      * one object {} for each HA server containing: enable, address, port etc.
    * Configure ESP devices
      * One object per device containing IP Address and Security Key
-2) Run the TW-Core and review avaiable entities
+2) Run the TW-Core and review available entities
    * Review Home Assistant entities http://127.0.0.1:20000/ha (or whatever port you specified in config.webDiagPort). These are the Home Assistant Entity names available for use in the TW-Client.
    * You can check the ESP Home devices that were discovered at http://127.0.0.1:20000/esp
    * use firefox to view the URL for pretty JSON formatting
