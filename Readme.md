@@ -3,7 +3,7 @@
 *This project is interested in collaborating with integration of the Zigbee2mqtt NodeJS API* https://www.npmjs.com/package/zigbee2mqtt 
 
 ### Preamble:
-Even if you don't require Home Assistant, Telegram, or ESPHome integration, this framework provides essential features such as UDP communications, a debugging website, timer functions, logging, notifications, a service installer, and straightforward management of both volatile and non-volatile memory storage.
+This framework was built with Home Assistant GUI in mind but even if you don't require Home Assistant, Telegram, or ESPHome integration, this framework provides essential features such as UDP communications, a debugging website, timer functions, logging, notifications, a service installer, and straightforward management of both volatile and non-volatile memory storage.
 
 ### General Concept of ThingWerks:
 ThingWerks is an ultra-lightweight IoT Automation Framework for NodeJS, intended to enable users to swiftly create automation scripts in NodeJS. Tailored for both industrial and home automation projects, its primary goal is to expedite the setup of a basic automation system.
