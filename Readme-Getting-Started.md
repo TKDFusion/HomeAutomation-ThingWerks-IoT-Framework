@@ -1,6 +1,7 @@
 ### If using Home Assistant or ESPHome:
-1) Install Home Asistant (Core) and or ESP Home https://github.com/thwerks/ThingWerks-IoT-Frmework/blob/main/Readme-install-ha-esphome.md
-2) Generate API Token if you're using Home Assistant 
+1) Install Home Asistant (Core) and or ESP Home
+   * https://github.com/thwerks/ThingWerks-IoT-Frmework/blob/main/Readme-install-ha-esphome.md
+3) Generate API Token if you're using Home Assistant 
    * https://community.home-assistant.io/t/how-to-get-long-lived-access-token/162159
   
 ### Prepare Files & Environment
