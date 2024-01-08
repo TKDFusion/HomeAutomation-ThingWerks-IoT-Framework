@@ -3,18 +3,21 @@ const { Worker, isMainThread, parentPort, workerData } = require('worker_threads
 if (isMainThread) {
     let
         ha = {  // shouldn't need to touch anything below this line except for log() function (to add your automation name)
-            fetch: function (client) {
-                let sendDelay = 0;
-                let completed = 0;
-                let buf = [];
+            fetch: function (client, retry) {
+                let sendDelay = 0, completed = 0, delay = 20, haSystem, buf = [];
+                if (retry == undefined) retry = 0;
                 if (client.ha) {
+                    //   console.log(client.ha);
+                    //  logs.haInputs.forEach(element => { console.log(element); });
                     for (let x = 0; x < client.ha.length; x++) {
                         for (let y = 0; y < cfg.homeAssistant.length; y++) {
+                            haSystem = y;
                             for (let z = 0; z < logs.haInputs[y].length; z++) {
+                                //  log("comparing client HA entity:  " + client.ha[x] + "   with    " + logs.haInputs[y][z], 1, 0)
+                                if (x == client.ha.length - 1 && z == logs.haInputs[y].length - 1) checkIfCompleted(x);
                                 if (logs.haInputs[y][z] == client.ha[x]) {
                                     log("HA fetch found device for : " + a.color("white", client.name) + " - Entity: " + logs.haInputs[y][z], 1, 0)
                                     getData(y, client.ha[x]);
-                                    break;
                                 }
                             }
                         }
@@ -26,14 +29,32 @@ if (isMainThread) {
                                     .then(data => { data.state == "on" ? buf.push(true) : buf.push(false); finished(); })
                                     .catch(err => console.error(err))
                             }, sendDelay);
-                            sendDelay += 20;
+                            sendDelay += delay;
+                        } else if (name.includes("input_button")) {
+                            setTimeout(() => {
+                                hass[ha].states.get('input_button', name)
+                                    .then(data => { data.state == "on" ? buf.push(true) : buf.push(false); finished(); })
+                                    .catch(err => console.error(err))
+                            }, sendDelay);
+                            sendDelay += delay;
+                        } else if (name.includes("input_number")) {
+                            setTimeout(() => {
+                                hass[ha].states.get('input_number', name)
+                                    .then(data => {
+                                        if (isNaN(Number(data.state)) != true && Number(data.state) != null)
+                                            buf.push(Number(data.state));
+                                        finished();
+                                    })
+                                    .catch(err => console.error(err))
+                            }, sendDelay);
+                            sendDelay += delay;
                         } else if (name.includes("switch")) {
                             setTimeout(() => {
                                 hass[ha].states.get('switch', name)
                                     .then(data => { data.state == "on" ? buf.push(true) : buf.push(false); finished(); })
                                     .catch(err => console.error(err))
                             }, sendDelay);
-                            sendDelay += 20;
+                            sendDelay += delay;
                         } else if (name.includes("flow")) {
                             setTimeout(() => {
                                 hass[ha].states.get('sensor', name)
@@ -44,22 +65,45 @@ if (isMainThread) {
                                     })
                                     .catch(err => console.error(err))
                             }, sendDelay);
-                            sendDelay += 20;
+                            sendDelay += delay;
                         } else {
                             setTimeout(() => {
                                 hass[ha].states.get('sensor', name)
                                     .then(data => { buf.push(Number(data.state)); finished(); })
                                     .catch(err => console.error(err))
                             }, sendDelay);
-                            sendDelay += 20;
+                            sendDelay += delay;
                         }
                     }
                 }
                 function finished() {
                     completed++;
                     if (client.ha.length == completed) {
+                        log("fetch completed, found " + completed + " entities, sending results for HA system:" + haSystem + " to client:" + client.name, 1)
                         udp.send(JSON.stringify({ type: "haFetchReply", obj: buf }), client.port)
                     }
+                }
+                function checkIfCompleted(x) {
+                    setTimeout(() => {
+                        if (completed != client.ha.length) {
+                            if (retry < 3) {
+                                log("Home Assistant is not fully online or some entities are not found, refreshing entities", 1, 2);
+                                retry++;
+                                for (let x = 0; x < cfg.homeAssistant.length; x++) {
+                                    logs.haInputs[x] = [];
+                                    hass[x].states.list()
+                                        .then(data => {
+                                            data.forEach(element => { logs.haInputs[x].push(element.entity_id) });
+                                            if (cfg.homeAssistant.length - 1 == x) response.send(logs.haInputs);
+                                        })
+                                        .catch(err => { log("entity query failed: " + err, 1, 2); });
+                                }
+                                // setTimeout(() => { ha.fetch(client, retry) }, 20e3);  // client will reinitiate fetch call 
+                            } else {
+                                log("Home Assistant is not fully online or some entities are not found, all attempts failed, ", 1, 3);
+                            }
+                        }
+                    }, 2e3);
                 }
             },
             ws: function () {
@@ -128,7 +172,7 @@ if (isMainThread) {
                                             for (let x = 0; x < state.udp.length; x++) {
                                                 for (let y = 0; y < state.udp[x].ha.length; y++) {
                                                     if (state.udp[x].ha[y] == buf.event.data.entity_id) {
-                                                        //     log("WS received data for sensor: " + x + JSON.stringify(buf.event.data.new_state))
+                                                        //     log("WS received data for sensor: " + x + " local name: " + state.udp[x].ha[y] + " buf name: " + buf.event.data.entity_id + JSON.stringify(buf.event.data.new_state))
                                                         if (ibuf === "on") obuf = true;
                                                         else if (ibuf === "off") obuf = false;
                                                         else if (ibuf === null || ibuf == undefined) log("HA (" + a.color("white", config.address) + ") is sending bogus (null/undefined) data: " + ibuf, 1, 2);
@@ -141,7 +185,7 @@ if (isMainThread) {
                                                         else log("HA (" + a.color("white", config.address) + ") is sending bogus (no match) Entity: " + buf.event.data.new_state.entity_id + " data: " + ibuf, 1, 2);
                                                         //   log("ws sensor: " + x + " data: " + buf.event.data.new_state.state + " result: " + ibuf);
                                                         if (obuf != undefined) {
-                                                            udp.send(JSON.stringify({ type: "haStateUpdate", obj: { id: x, state: obuf } }), state.udp[x].port);
+                                                            udp.send(JSON.stringify({ type: "haStateUpdate", obj: { id: y, state: obuf } }), state.udp[x].port);
                                                         }
                                                     }
                                                 }
@@ -206,7 +250,7 @@ if (isMainThread) {
                         fs.readFile(workingDir + "/config.json", function (err, data) {
                             if (err) {
                                 console.log("\x1b[31;1mCannot find config file, exiting\x1b[37;m"
-                                    + "\ncfg.json file should be in same folder as ha.js file");
+                                    + "\nconfig.json file should be in same folder as core.js file");
                                 process.exit();
                             }
                             else { cfg = JSON.parse(data); sys.boot(1); }
@@ -226,7 +270,7 @@ if (isMainThread) {
                         fs.readFile(workingDir + "/nv.json", function (err, data) {
                             if (err) {
                                 console.log("\x1b[33;1mNon-Volatile Storage does not exist\x1b[37;m"
-                                    + "\nnv.json file should be in same folder as ha.js file");
+                                    + "\nnv.json file should be in same folder as core.js file");
                                 nv = { telegram: [] };
                                 sys.boot(2);
                             }
@@ -246,16 +290,27 @@ if (isMainThread) {
                         udp.bind(65432);
                         if (cfg.webDiag) {
                             express.get("/el", function (request, response) { response.send(logs.esp); });
-                            express.get("/ha", function (request, response) { response.send(logs.haInputs); });
                             express.get("/log", function (request, response) { response.send(logs.sys); });
                             express.get("/tg", function (request, response) { response.send(logs.tg); });
                             express.get("/ws", function (request, response) { response.send(logs.ws); });
                             express.get("/nv", function (request, response) { response.send(nv); });
                             express.get("/state", function (request, response) { response.send(state); });
-                            express.get("/cfg", function (request, response) { response.send(cfg); })
-                            express.get("/perf", function (request, response) { response.send(state.perf); })
-                            express.get("/esp", function (request, response) { response.send(state.esp); })
-                            express.get("/udp", function (request, response) { response.send(state.udp); })
+                            express.get("/cfg", function (request, response) { response.send(cfg); });
+                            express.get("/perf", function (request, response) { response.send(state.perf); });
+                            express.get("/esp", function (request, response) { response.send(state.esp); });
+                            express.get("/udp", function (request, response) { response.send(state.udp); });
+                            express.get("/ha", function (request, response) {
+                                for (let x = 0; x < cfg.homeAssistant.length; x++) {
+                                    logs.haInputs[x] = [];
+                                    hass[x].states.list()
+                                        .then(data => {
+                                            data.forEach(element => { logs.haInputs[x].push(element.entity_id) });
+                                            if (cfg.homeAssistant.length - 1 == x) response.send(logs.haInputs);
+                                        })
+                                        .catch(err => { log("fetching failed", 0, 2); });
+                                }
+
+                            });
                             express.get("/diag", function (request, response) {
                                 for (let x = 0; x < state.udp.length; x++) {
                                     udp.send(JSON.stringify({ type: "diag" }), state.udp[x].port);
@@ -358,11 +413,11 @@ if (isMainThread) {
                         }
                         // log("incoming esp state: " + buf.obj.name + " data: " + buf.obj.state, 3, 0);
                         break;
-                    case "haFetch":     // incoming fetch request
+                    case "haFetch":     // incoming state fetch request
+                        log("receiving fetch request from client: " + id + " name: " + state.udp[id].name, 3, 0);
                         ha.fetch(state.udp[id]);
-                        //     log("receiving fetch request", 3, 0);
                         break;
-                    case "haQuery":     // HA device list request
+                    case "haQuery":     // HA all device list request
                         logs.haInputs = [];
                         for (let x = 0; x < cfg.homeAssistant.length; x++) {
                             logs.haInputs.push([]);
@@ -455,7 +510,17 @@ if (isMainThread) {
                         break;
                     case "diag":        // incoming UDP client Diag
                         //       log("receiving diag")
-                        diag[id] = { name: state.udp[id].name, ip: state.udp[id].ip, data: buf.obj }
+                        // console.log(buf.obj);
+                        let diagBuf = { ha: [], esp: [], auto: [] };
+                        if (buf.obj.state.ha)
+                            for (let x = 0; x < buf.obj.state.ha.length; x++) {
+                                diagBuf.ha.push({ name: state.udp[id].ha[x], state: buf.obj.state.ha[x] })
+                            }
+                        if (buf.obj.state.esp)
+                            for (let x = 0; x < buf.obj.state.esp.length; x++) {
+                                diagBuf.esp.push({ name: state.udp[id].esp[x], state: buf.obj.state.esp[x] })
+                            }
+                        diag[id] = { name: state.udp[id].name, ip: state.udp[id].ip, state: diagBuf }
                         break;
                     case "telegram":
                         // log("receiving telegram data: " + buf.obj, 4, 0);
@@ -526,6 +591,7 @@ if (isMainThread) {
                         return vbuf;
                     }
                 },
+                    util = require('util'),
                     exec = require('child_process').exec,
                     execSync = require('child_process').execSync,
                     HomeAssistant = require('homeassistant'),
@@ -542,7 +608,7 @@ if (isMainThread) {
                 diag = [];      // array for each UDP client diag
                 ws = [];
                 hass = [];
-                time = { date: undefined, month: 0, day: 0, dayLast: undefined, hour: 0, hourLast: undefined, min: 0, minLast: undefined, sec: 0, up: 0, ms: 0, millis: 0, stamp: "" };
+                time = { date: undefined, month: 0, day: 0, dow: 0, dayLast: undefined, hour: 0, hourLast: undefined, min: 0, minLast: undefined, sec: 0, up: 0, ms: 0, millis: 0, stamp: "" };
                 logs = { step: 0, sys: [], ws: [], tg: [], tgStep: 0, haInputs: [], esp: [] };
                 sys.time.sync();
                 time.minLast = time.min;
@@ -589,14 +655,14 @@ if (isMainThread) {
             },
             checkArgs: function () {
                 if (process.argv[2] == "-i") {
-                    log("installing TW-Core service...");
+                    log("installing ThingWerks-Core service...");
                     let service = [
                         "[Unit]",
                         "Description=\n",
                         "[Install]",
                         "WantedBy=multi-user.target\n",
                         "[Service]",
-                        "ExecStart=/bin/nodemon " + cfg.workingDir + "/tw-core.js",
+                        "ExecStart=nodemon " + cfg.workingDir + "/core.js -w " + cfg.workingDir + "/core.js",
                         "Type=simple",
                         "User=root",
                         "Group=root",
@@ -609,6 +675,7 @@ if (isMainThread) {
                     execSync("systemctl daemon-reload");
                     execSync("systemctl enable tw-core.service");
                     execSync("systemctl start tw-core");
+                    execSync("service tw-core status");
                     log("service installed and started");
                     console.log("type: journalctl -f -u tw-core");
                     process.exit();
@@ -680,6 +747,7 @@ if (isMainThread) {
                     time.sec = time.date.getSeconds();
                     time.min = time.date.getMinutes();
                     time.hour = time.date.getHours();
+                    time.dow = time.date.getDay();
                     time.day = time.date.getDate();
                     time.month = time.date.getMonth();
                     time.stamp = ("0" + time.month).slice(-2) + "-" + ("0" + time.day).slice(-2) + " "
@@ -694,19 +762,14 @@ if (isMainThread) {
                     function everyMin() {
                         if (time.hourLast != time.hour) { time.hourLast = time.hour; everyHour(); }
                         for (let x = 0; x < state.udp.length; x++) {
-                            udp.send(JSON.stringify({ type: "timerMin" }), state.udp[x].port);
+                            udp.send(JSON.stringify({ type: "timer", obj: { day: time.day, dow: time.dow, hour: time.hour, min: time.min } }), state.udp[x].port);
                         }
                     }
                     function everyHour() {
                         if (time.dayLast != time.day) { time.dayLast = time.day; everyDay(); }
-                        for (let x = 0; x < state.udp.length; x++) {
-                            udp.send(JSON.stringify({ type: "timerHour" }), state.udp[x].port);
-                        }
+
                     }
                     function everyDay() {
-                        for (let x = 0; x < state.udp.length; x++) {
-                            udp.send(JSON.stringify({ type: "timerDay" }), state.udp[x].port);
-                        }
                     }
                 },
             },
