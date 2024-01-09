@@ -20,58 +20,32 @@ if (isMainThread) {
                                 }
                             }
                         }
-                    }
+                    }       // flow is different than regular because NaN will corrupt flow meter NV data and also we want to know if a regular sensor is NaN
                     function getData(ha, name) {
-                        if (name.includes("input_boolean")) {
-                            setTimeout(() => {
-                                hass[ha].states.get('input_boolean', name)
-                                    .then(data => { data.state == "on" ? buf.push(true) : buf.push(false); finished(); })
-                                    .catch(err => console.error(err))
-                            }, sendDelay);
-                            sendDelay += delay;
-                        } else if (name.includes("input_button")) {
-                            setTimeout(() => {
-                                hass[ha].states.get('input_button', name)
-                                    .then(data => { data.state == "on" ? buf.push(true) : buf.push(false); finished(); })
-                                    .catch(err => console.error(err))
-                            }, sendDelay);
-                            sendDelay += delay;
-                        } else if (name.includes("input_number")) {
-                            setTimeout(() => {
-                                hass[ha].states.get('input_number', name)
-                                    .then(data => {
-                                        if (isNaN(Number(data.state)) != true && Number(data.state) != null)
-                                            buf.push(Number(data.state));
-                                        finished();
-                                    })
-                                    .catch(err => console.error(err))
-                            }, sendDelay);
-                            sendDelay += delay;
-                        } else if (name.includes("switch")) {
-                            setTimeout(() => {
-                                hass[ha].states.get('switch', name)
-                                    .then(data => { data.state == "on" ? buf.push(true) : buf.push(false); finished(); })
-                                    .catch(err => console.error(err))
-                            }, sendDelay);
-                            sendDelay += delay;
-                        } else if (name.includes("flow")) {
-                            setTimeout(() => {
-                                hass[ha].states.get('sensor', name)
-                                    .then(data => {
-                                        if (isNaN(Number(data.state)) != true && Number(data.state) != null)
-                                            buf.push(Number(data.state));
-                                        finished();
-                                    })
-                                    .catch(err => console.error(err))
-                            }, sendDelay);
-                            sendDelay += delay;
-                        } else {
-                            setTimeout(() => {
-                                hass[ha].states.get('sensor', name)
-                                    .then(data => { buf.push(Number(data.state)); finished(); })
-                                    .catch(err => console.error(err))
-                            }, sendDelay);
-                            sendDelay += delay;
+                        let typeCheck = ["input_boolean", 'input_button', "switch", "input_number", "flow", "sensor"];
+                        let typeGet = ["input_boolean", 'input_button', "switch", "input_number", "sensor", "sensor"];  
+                        for (let x = 0; x < typeCheck.length; x++) {
+                            if (name.includes(typeCheck[x])) {
+                                setTimeout(() => {
+                                    hass[ha].states.get(typeGet[x], name)
+                                        .then(data => {
+                                            switch (x) {
+                                                case 0:
+                                                case 1:
+                                                case 2: data.state == "on" ? buf.push(true) : buf.push(false); finished(); break;
+                                                case 3:
+                                                case 4: if (isNaN(Number(data.state)) != true && Number(data.state) != null)
+                                                    buf.push(Number(data.state));  // prevent NaN for flow meters
+                                                    finished();
+                                                    break;
+                                                case 5: buf.push(Number(data.state)); finished(); break;
+                                            }
+                                        })
+                                        .catch(err => console.error(err))
+                                }, sendDelay);
+                                sendDelay += delay;
+                                break;
+                            }
                         }
                     }
                 }
