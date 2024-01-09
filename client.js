@@ -2,59 +2,74 @@
 let
     cfg = {
         moduleName: "NewClientModule",      // give this NodeJS Client a name for notification
-        telegram: {
-            password: "password",           // password for telegram registration 
+        telegram: {                         // delete this object if you don't use Tekegram
+            password: "password",           // password for telegram registration
         },
         ha: [                               // add all your home assistant entities here
-            "myHaEntity",
+            "myHaEntity",                   // this index order is used for incoming state events and output calls as well (ie state.ha[0] etc...)
         ],
         esp: [                              // add all your ESP entities here
-            "myEspEntity",
+            "myEspEntity",                  // this index order is used for incoming state events and output calls as well (ie state.esp[0] etc...)
         ]
     },
-    automation = [
+    automation = [                                                          // create a (index) => {},  array member function for each automation 
         (index) => {
-            let time = Math.floor(Date.now() / 1000 / 60)                   // set the epoch time for this function 
+            let time = Math.floor(Date.now() / 1000 / 60)                   // set the epoch time for this function, used for counting time in minutes, you can remove "60" if you need seconds and also remove "1000" if you need MS
             if (!state.auto[index]) {                                       // this block gets run once
-                state.auto.push({ name: "Auto-System", });                  // create object for this automation, give name
-                setInterval(() => { automation[index](index); }, 1e3);      // set minimum rerun time, otherwise only on ESP and HA events
+                state.auto.push({                                           // create object for this automation, 
+                    name: "Auto-System",                                    //   give it a name and 
+                    fan: { started: false, step: time, ha: {} }             //   create an object for each of this automation's devices or features     
+                });
+                setInterval(() => { automation[index](index); }, 1e3);      // set minimum rerun time, otherwise this automation function will only on ESP and HA events
                 log("system started", index, 1);                            // log automation start with index number and severity 
+                em.on("state" + "input_button.test", () => button.test());  // create an event emitter for this entities like buttons that call a member function
             }
             let st = state.auto[index];                                     // set automation state object's shorthand name to "st" (state) 
-        },
+            st.fan.ha = {                                                   // assign relevant HA entities for this device 
+                state: state.ha[3], auto: state.ha[2]                       // assign relevant HA entity stats  
+                , timeOn: state.ha[0], timeOff: state.ha[1]
+            }
+            let button = {
+                test: function () {                                         // example object member function called by emitter
+                    ha.send("switch.fan_exhaust_switch", false);
+                    ha.send("input_boolean.fan_auto", true);
+                    ha.send("switch.fan_bed_switch", false);
+                    ha.send(0, false);                                      // you can call by the entity number as listed in the order in cfg.ha
+                    ha.send(2, true);                                       // or you can call my the entity's ID name as listed in Home Assistant
+                    ha.send(3, false);
+                }
+            };
+        }
     ];
 let
     user = {        // user configurable block - Telegram and timer function.  
-        timer: function (day, dow, hour, min) {    // these functions are called once every min,hour,day. Use time.min time.hour and time.day for comparison 
-            if (hour == 18 && min == 0) {
+        timer: function (day, dow, hour, min) {     // these functions are called once every min,hour,day. Use time.min time.hour and time.day for comparison 
+            if (hour == 18 && min == 0) {           // example, turn on some entities at 6pm and turn off qt midnight 
                 log("turning on outside lights");
-                ha.state("switch.daren_light_outside_switch", true);
-                ha.state("switch.jesmark_light_outside_switch", true);
+                ha.send("switch.light_outside_switch", true);
+                ha.send(2, true);
             }
             if (hour == 0 && min == 0) {
                 log("turning off outside lights");
-                ha.state("switch.daren_light_outside_switch", false);
-                ha.state("switch.jesmark_light_outside_switch", false);
+                ha.send("switch.light_outside_switch", false);
+                ha.send(2, false);
             }
         },
-        telegram: { // enter a case matching your desireable input
-            agent: function (msg) {
-         
-            },
-            response: function (msg) {  // enter a two character code to identify your callback "case" 
-            },
+        telegram: { // enter a case matching your desireable input, 
+            agent: function (msg) { },
+            response: function (msg) { }, // enter a two character code to identify your callback "case" 
         },
     },
-    sys = {
+    sys = {         // you don't need to modify anything below this line
         boot: function (step) {
             switch (step) {
                 case 0:
                     sys.lib();
                     console.log("Loading non-volatile data...");
-                    fs.readFile(workingDir + "/nv.json", function (err, data) {
+                    fs.readFile(workingDir + "/nv-client.json", function (err, data) {
                         if (err) {
                             log("\x1b[33;1mNon-Volatile Storage does not exist\x1b[37;m"
-                                + "\nnv.json file should be in same folder as client.js file");
+                                + "\nnv-client.json file should be in same folder as client.js file");
                             nv = { telegram: [] };
                         }
                         else { nv = JSON.parse(data); }
@@ -124,8 +139,7 @@ let
                             break;
                         case "diag":                // incoming diag refresh request, then reply object
                             diag = { state: state, nv: nv }
-                            udp.send(JSON.stringify({ type: "diag", obj: diag }
-                            ), 65432, 'localhost');
+                            send("diag", diag);
                             break;
                         case "telegram":
                             switch (buf.obj.class) {
@@ -134,7 +148,10 @@ let
                                     break;
                             }
                             break;
-                        case "timer": user.timer(buf.obj.day, buf.obj.dow, buf.obj.hour, buf.obj.min); break;
+                        case "timer":
+                            user.timer(buf.obj.day, buf.obj.dow, buf.obj.hour, buf.obj.min);
+                            time = { day: buf.obj.day, dow: buf.obj.dow, hour: buf.obj.hour, min: buf.obj.min };
+                            break;
                         case "log": console.log(buf.obj); break;
                     }
                 }
@@ -145,9 +162,9 @@ let
             if (cfg.ha != undefined) obj.ha = cfg.ha;
             if (cfg.esp != undefined) obj.esp = cfg.esp;
             if (cfg.telegram != undefined) obj.telegram = true;
-            udp.send(JSON.stringify({ type: "register", obj: obj, name: cfg.moduleName }), 65432, 'localhost');
+            send("register", obj, cfg.moduleName);
         },
-        heartBeat: function () { udp.send(JSON.stringify({ type: "heartBeat" }), 65432, 'localhost'); },
+        heartBeat: function () { send("heartBeat") },
         checkArgs: function () {
             if (process.argv[2] == "-i") {
                 log("installing TW-Client-" + cfg.moduleName + " service...");
@@ -179,9 +196,9 @@ let
         file: {
             write: {
                 nv: function () {  // write non-volatile memory to the disk
-                    log("writing NV data...")
-                    fs.writeFile(workingDir + "/nv-bak.json", JSON.stringify(nv), function () {
-                        fs.copyFile(workingDir + "/nv-bak.json", workingDir + "/nv.json", (err) => {
+                    log("writing Client NV data...")
+                    fs.writeFile(workingDir + "/client-nv-bak.json", JSON.stringify(nv), function () {
+                        fs.copyFile(workingDir + "/client-nv-bak.json", workingDir + "/client-nv.json", (err) => {
                             if (err) throw err;
                         });
                     });
@@ -228,35 +245,24 @@ let
         },
     },
     esp = {
-        state: function (name, state) { udp.send(JSON.stringify({ type: "espState", obj: { name: name, state: state } }), 65432, 'localhost') }
+        send: function (name, state) { send("espState", { name: name, state: state }) }
     },
     ha = {
-        fetch: function () { udp.send(JSON.stringify({ type: "haFetch" }), 65432, 'localhost'); },
-        getEntities: function () { udp.send(JSON.stringify({ type: "haQuery" }), 65432, 'localhost'); },
-        state: function (name, state, unit, ip) {
-            udp.send(JSON.stringify({ type: "haState", obj: { name: name, state: state, unit: unit, ip: ip } }), 65432, 'localhost');
+        fetch: function () { send("haFetch") },
+        getEntities: function () { send("haQuery") },
+        send: function (name, state, unit, ip) {
+            if (isFinite(Number(name)) == true) send("haState", { name: cfg.ha[name], state: state, unit: unit, ip: ip });
+            else send("haState", { name: name, state: state, unit: unit, ip: ip });
         }
     },
     state = { ha: [], esp: [], auto: [], online: false },
     nv = {},
+    time = {},
     diag = {};
 setTimeout(() => { sys.boot(0); }, 1e3);
 function bot(id, data, obj) { send("telegram", { class: "send", id: id, data: data, obj: obj }) }
-function send(type, obj) { udp.send(JSON.stringify({ type: type, obj: obj }), 65432, 'localhost') }
-function sendAsync(type, obj) {
-    send(type, obj);
-    return new Promise((resolve) => {
-        const asyncHandler = (data) => {
-            let buf = JSON.parse(data);
-            //    console.log("promise is checking data: " + data)
-            if (buf.type == "async") { resolve(buf.obj); udp.removeListener('message', asyncHandler); }
-        };
-        udp.on('message', asyncHandler);
-    });
-}
+function send(type, obj, name) { udp.send(JSON.stringify({ type: type, obj: obj, name: name }), 65432, 'localhost') }
 function log(message, index, level) {
     if (!level) send("log", { message: message, mod: cfg.moduleName, level: index });
     else send("log", { message: message, mod: state.auto[index].name, level: level });
 }
-
-
