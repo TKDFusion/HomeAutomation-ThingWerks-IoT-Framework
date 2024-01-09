@@ -2,7 +2,7 @@
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 if (isMainThread) {
     let
-        ha = {  // shouldn't need to touch anything below this line except for log() function (to add your automation name)
+        ha = {
             fetch: function (client, retry) {
                 let sendDelay = 0, completed = 0, delay = 20, haSystem, buf = [];
                 if (retry == undefined) retry = 0;
@@ -13,7 +13,6 @@ if (isMainThread) {
                         for (let y = 0; y < cfg.homeAssistant.length; y++) {
                             haSystem = y;
                             for (let z = 0; z < logs.haInputs[y].length; z++) {
-                                //  log("comparing client HA entity:  " + client.ha[x] + "   with    " + logs.haInputs[y][z], 1, 0)
                                 if (x == client.ha.length - 1 && z == logs.haInputs[y].length - 1) checkIfCompleted(x);
                                 if (logs.haInputs[y][z] == client.ha[x]) {
                                     log("HA fetch found device for : " + a.color("white", client.name) + " - Entity: " + logs.haInputs[y][z], 1, 0)
@@ -182,7 +181,9 @@ if (isMainThread) {
                                                         }
                                                         else if (!isNaN(parseFloat(Number(ibuf))) == true
                                                             && isFinite(Number(ibuf)) == true && Number(ibuf) != null) obuf = ibuf;
-                                                        else log("HA (" + a.color("white", config.address) + ") is sending bogus (no match) Entity: " + buf.event.data.new_state.entity_id + " data: " + ibuf, 1, 2);
+                                                        else if (ibuf.length == 32) { obuf = ibuf }
+                                                        else log("HA (" + a.color("white", config.address) + ") is sending bogus data = Entity: "
+                                                            + buf.event.data.new_state.entity_id + " Bytes: " + ibuf.length + " data: " + ibuf, 1, 2);
                                                         //   log("ws sensor: " + x + " data: " + buf.event.data.new_state.state + " result: " + ibuf);
                                                         if (obuf != undefined) {
                                                             udp.send(JSON.stringify({ type: "haStateUpdate", obj: { id: y, state: obuf } }), state.udp[x].port);
@@ -283,7 +284,8 @@ if (isMainThread) {
                         log("initializing system states done");
                         log("checking args");
                         sys.checkArgs();
-                        log("Working Directory: " + cfg.workingDir);
+                        log("specified Working Directory: " + cfg.workingDir);
+                        log("actual working directory: " + workingDir);
                         udp.on('listening', () => { log("starting UDP Server - Port 65432"); });
                         udp.on('error', (err) => { console.error(`udp server error:\n${err.stack}`); udp.close(); });
                         udp.on('message', (msg, info) => { sys.udp(msg, info); });
