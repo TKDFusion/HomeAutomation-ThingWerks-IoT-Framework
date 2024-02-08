@@ -1,80 +1,62 @@
-esphome: 
-  name: esp-filter
-  friendly_name: ESP-Filter
+esphome:
+  name: esp-test
+  friendly_name: ESP-Test
+
 esp32:
   board: esp32dev
   framework:
     type: arduino
+
+# Enable logging
 logger:
+
+# Enable Home Assistant API
 api:
   encryption:
-    key: "myKey"
+    key: "mykey"
+
 ota:
-  password: "myKey"
+  password: "ota pass"
+
 wifi:
-  ssid: HotSpot-Genset
-  ap:
-    ssid: "ESP Genset Fallback"
-    password: "myKey"
+  networks:
+  - ssid: myWifi
   manual_ip:
-    static_ip: 10.21.4.30
-    gateway: 10.21.4.1
-    subnet: 255.255.254.0
-    dns1: 8.8.8.8
-captive_portal:
+    static_ip: 10.10.1.245
+    gateway: 10.10.0.1
+    subnet: 255.255.224.0 
+  output_power: 20dB
+  power_save_mode: none
+uart:
+  rx_pin: GPIO04
+  tx_pin: GPIO16
+  baud_rate: 9600
+modbus:
 sensor:
-  - platform: pulse_counter     # example flow meter
-    name: "Flow-Filter"
+  - platform: pulse_counter
+    name: "Flow-Test"
     pin: GPIO14
-    update_interval: 1s
+    update_interval: 2s
     filters:
-    - lambda: return x;
-    unit_of_measurement: "pps"  # send data as pulses per second or hz
-    accuracy_decimals:  0 
-  - platform: adc               # example 5psi pressure transducer
-    name: "PSI-Tank-Mountain"
+    - lambda: return x / 60.0;
+    unit_of_measurement: "L/m" 
+    total:
+      name: "Flow-Total-Test"
+      unit_of_measurement: "m3"
+      accuracy_decimals: 3
+      filters:
+        - lambda: return x / 60 / 1000;
+  - platform: adc
+    name: "PSI-Test"
     pin: GPIO35
     id: pressure
     update_interval: 1s
-    unit_of_measurement: "m"
-    accuracy_decimals: 2 
+    unit_of_measurement: "v"
+    accuracy_decimals: 1
     attenuation: 11db
-    filters:
-      - calibrate_linear:
-        - 0.5 -> 0.0
-        - 3.3 -> 2.4607         # for 5psi transducer .5-4.5v = 0-5 psi therefore .5-3.3v = 0-3.5 psi and 1 psi = .7031 meters head so 3.3v = 2.4607 meters
-      - median:
-            window_size: 50
-            send_every: 2
-binary_sensor:                  # example binary input sensor
+switch:
   - platform: gpio
-    name: "Switch-Tazok"
+    name: "led"
     pin:
-      number: 27
-      inverted: true
-      mode:
-        input: true
-        pullup: true
-    filters:
-      - delayed_on: 1000ms
-switch:                         # switch output example
-  - platform: gpio
-    name: "Relay-Submersible"
-    pin:
-      number: 23
-      inverted: true
-  - platform: gpio
-    name: "Relay2"
-    pin:
-      number: 22
-      inverted: true
-  - platform: gpio
-    name: "Relay3"
-    pin:
-      number: 21
-      inverted: true
-  - platform: gpio
-    name: "Relay4"
-    pin:
-      number: 18
-      inverted: true
+      number: 2
+      inverted: false
