@@ -15,7 +15,7 @@ if (isMainThread) {
                             for (let z = 0; z < logs.haInputs[y].length; z++) {
                                 if (x == client.ha.length - 1 && z == logs.haInputs[y].length - 1) checkIfCompleted(x);
                                 if (logs.haInputs[y][z] == client.ha[x]) {
-                                    log("HA fetch found device for : " + a.color("white", client.name) + " - Entity: " + logs.haInputs[y][z], 1, 0)
+                                    log("HA fetch found device for Client: " + a.color("white", client.name) + " On HA System: " + y + " - Entity: " + logs.haInputs[y][z], 1, 0)
                                     getData(y, client.ha[x]);
                                 }
                             }
@@ -23,7 +23,7 @@ if (isMainThread) {
                     }       // flow is different than regular because NaN will corrupt flow meter NV data and also we want to know if a regular sensor is NaN
                     function getData(ha, name) {
                         let typeCheck = ["input_boolean", 'input_button', "switch", "input_number", "flow", "sensor"];
-                        let typeGet = ["input_boolean", 'input_button', "switch", "input_number", "sensor", "sensor"];  
+                        let typeGet = ["input_boolean", 'input_button', "switch", "input_number", "sensor", "sensor"];
                         for (let x = 0; x < typeCheck.length; x++) {
                             if (name.includes(typeCheck[x])) {
                                 setTimeout(() => {
@@ -80,13 +80,13 @@ if (isMainThread) {
                 }
             },
             ws: function () {
-                for (let x = 0; x < cfg.homeAssistant.length; x++) {
+                for (let haNum = 0; haNum < cfg.homeAssistant.length; haNum++) {
                     ws.push({});
-                    let client = state.ha[x].ws;
-                    let config = cfg.homeAssistant[x];
-                    ws[x].connect("ws://" + config.address + ":" + config.port + "/api/websocket");
-                    ws[x].on('connectFailed', function (error) { if (!client.error) { log(error.toString(), 1, 3); client.error = true; } });
-                    ws[x].on('connect', function (socket) {
+                    let client = state.ha[haNum].ws;
+                    let config = cfg.homeAssistant[haNum];
+                    ws[haNum].connect("ws://" + config.address + ":" + config.port + "/api/websocket");
+                    ws[haNum].on('connectFailed', function (error) { if (!client.error) { log(error.toString(), 1, 3); client.error = true; } });
+                    ws[haNum].on('connect', function (socket) {
                         //    if (client.reply == false) { log("fetching sensor states", 1); ha.fetch(); client.id = 0; }
                         client.reply = true;
                         client.online = true;
@@ -112,7 +112,7 @@ if (isMainThread) {
                                     send({ type: "auth", access_token: config.token, });
                                     break;
                                 case "auth_ok":
-                                    state.udp = []; // force reregistrations on connect (will force fetch again)
+                                    state.udp = []; // force UDP client to reconnect if WS gets disconnected (will force fetch again)
                                     log("Websocket (" + a.color("white", config.address) + ") authentication accepted", 1);
                                     log("Websocket (" + a.color("white", config.address) + ") subscribing to event listener", 1);
                                     send({ id: 1, type: "subscribe_events", event_type: "state_changed" });
@@ -130,36 +130,36 @@ if (isMainThread) {
                                 case "event":
                                     switch (buf.event.event_type) {
                                         case "state_changed":
-                                            if (config.legacyAPI == false && state.perf.ha[x].wait == true) {
+                                            if (config.legacyAPI == false && state.perf.ha[haNum].wait == true) {
                                                 let delay = ha.perf(0);
                                                 log("ws delay was: " + delay, 0, 0)
                                             }
                                             let ibuf = undefined;
-                                            if (buf.event.data.new_state != undefined
+                                            if (buf.event.data.new_state != undefined                       // filter out corrupted events
                                                 && buf.event.data.new_state != null) ibuf = buf.event.data.new_state.state;
                                             let obuf = undefined;
-                                            if (logs.ws[x][client.logStep] == undefined) logs.ws[x].push(buf.event);
-                                            else logs.ws[x][client.logStep] = buf.event
+                                            if (logs.ws[haNum][client.logStep] == undefined) logs.ws[haNum].push(buf.event);
+                                            else logs.ws[haNum][client.logStep] = buf.event                     // record last 200 ws events for this client into the ws log  
                                             if (client.logStep < 200) client.logStep++; else client.logStep = 0;
                                             //  log("WS received data" + JSON.stringify(buf.event))
-                                            for (let x = 0; x < state.udp.length; x++) {
-                                                for (let y = 0; y < state.udp[x].ha.length; y++) {
-                                                    if (state.udp[x].ha[y] == buf.event.data.entity_id) {
+                                            for (let x = 0; x < state.udp.length; x++) {                    // scan all UDP clients
+                                                for (let y = 0; y < state.udp[x].ha.length; y++) {          // scan registered HA entities for each client 
+                                                    if (state.udp[x].ha[y] == buf.event.data.entity_id) {   // if this entity ID matches Client X's Entity Y
                                                         //     log("WS received data for sensor: " + x + " local name: " + state.udp[x].ha[y] + " buf name: " + buf.event.data.entity_id + JSON.stringify(buf.event.data.new_state))
-                                                        if (ibuf === "on") obuf = true;
+                                                        if (ibuf === "on") obuf = true;                     // check if entity is binary
                                                         else if (ibuf === "off") obuf = false;
                                                         else if (ibuf === null || ibuf == undefined) log("HA (" + a.color("white", config.address) + ") is sending bogus (null/undefined) data: " + ibuf, 1, 2);
-                                                        else if (ibuf === "unavailable") {
-                                                            if (config.log.espDisconnect == true)
+                                                        else if (ibuf === "unavailable") {                  // only disconnected ESP modules send this code
+                                                            if (config.log.espDisconnect == true)           // its annoying, see if enabled 
                                                                 log("HA (" + a.color("white", config.address) + "): ESP Module " + buf.event.data.new_state.entity_id + " has gone offline - " + ibuf, 1, 2);
                                                         }
-                                                        else if (!isNaN(parseFloat(Number(ibuf))) == true
+                                                        else if (!isNaN(parseFloat(Number(ibuf))) == true   // check if data is float
                                                             && isFinite(Number(ibuf)) == true && Number(ibuf) != null) obuf = ibuf;
-                                                        else if (ibuf.length == 32) { obuf = ibuf }
+                                                        else if (ibuf.length == 32) { obuf = ibuf }         // button entity, its always 32 chars
                                                         else log("HA (" + a.color("white", config.address) + ") is sending bogus data = Entity: "
                                                             + buf.event.data.new_state.entity_id + " Bytes: " + ibuf.length + " data: " + ibuf, 1, 2);
                                                         //   log("ws sensor: " + x + " data: " + buf.event.data.new_state.state + " result: " + ibuf);
-                                                        if (obuf != undefined) {
+                                                        if (obuf != undefined) {                            // send data to relevant clients 
                                                             udp.send(JSON.stringify({ type: "haStateUpdate", obj: { id: y, state: obuf } }), state.udp[x].port);
                                                         }
                                                     }
@@ -170,7 +170,7 @@ if (isMainThread) {
                                     break;
                             }
                         });
-                        em.on('send' + x, function (data) { send(data) });
+                        em.on('send' + haNum, function (data) { send(data) });
                         function send(data) { socket.sendUTF(JSON.stringify(data)); }
                         function ping() {
                             if (client.reply == false) {
@@ -187,7 +187,7 @@ if (isMainThread) {
                         }
                         function haReconnect(error) {
                             log("websocket (" + a.color("white", config.address) + ") " + error.toString(), 1, 3);
-                            ws[x].connect("ws://" + config.address + ":" + config.port + "/api/websocket");
+                            ws[haNum].connect("ws://" + config.address + ":" + config.port + "/api/websocket");
                             setTimeout(() => { if (client.reply == false) { haReconnect("retrying..."); } }, 10e3);
                         }
                     });
@@ -260,10 +260,10 @@ if (isMainThread) {
                         sys.checkArgs();
                         log("specified Working Directory: " + cfg.workingDir);
                         log("actual working directory: " + workingDir);
-                        udp.on('listening', () => { log("starting UDP Server - Port 65432"); });
+                        udp.on('listening', () => { log("starting UDP Server - Interface: 127.0.0.1 Port: 65432"); });
                         udp.on('error', (err) => { console.error(`udp server error:\n${err.stack}`); udp.close(); });
                         udp.on('message', (msg, info) => { sys.udp(msg, info); });
-                        udp.bind(65432);
+                        udp.bind(65432, "127.0.0.1");
                         if (cfg.webDiag) {
                             express.get("/el", function (request, response) { response.send(logs.esp); });
                             express.get("/log", function (request, response) { response.send(logs.sys); });
@@ -324,21 +324,32 @@ if (isMainThread) {
                             for (let x = 0; x < cfg.homeAssistant.length; x++) {
                                 if (cfg.homeAssistant[x].enable == true) {
                                     haconnect();
+                                    log("Legacy API - connecting to " + a.color("white", cfg.homeAssistant[x].address), 1);
                                     function haconnect() {
                                         hass[x].status()
                                             .then(data => {
-                                                log("Legacy HA (" + a.color("white", cfg.homeAssistant[x].address) + ") service: " + a.color("green", data.message), 1);
-                                                log("Legacy HA (" + a.color("white", cfg.homeAssistant[x].address) + ") fetching available inputs", 1);
+                                                log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") service: " + a.color("green", data.message), 1);
+                                                log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") fetching available inputs", 1);
                                                 hass[x].states.list()
                                                     .then(data => {
-                                                        data.forEach(element => { logs.haInputs[x].push(element.entity_id) });
-                                                        if (x == cfg.homeAssistant.length - 1) sys.boot(4);
+                                                        if (data.includes("401: Unauthorized"))
+                                                            log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") Connection failed:" + data, 1, 3)
+                                                        else {
+                                                            data.forEach(element => { logs.haInputs[x].push(element.entity_id) });
+                                                            if (x == cfg.homeAssistant.length - 1) sys.boot(4);
+                                                        }
                                                     })
-                                                    .catch(err => { log(err, 1, 2); });
+                                                    .catch(err => {
+                                                        log(err, 1, 2);
+                                                        log("Legacy API - connection to (" + a.color("white", cfg.homeAssistant[x].address) + ") failed, retrying in 10 seconds", 3);
+                                                        setTimeout(() => {
+                                                            haconnect();
+                                                        }, 10e3);
+                                                    });
                                             })
                                             .catch(err => {
                                                 setTimeout(() => {
-                                                    log("Legacy HA (" + a.color("white", cfg.homeAssistant[x].address) + ") service: Connection failed, retrying....", 1, 2)
+                                                    log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") service: Connection failed, retrying....", 1, 2)
                                                     haconnect();
                                                 }, 10e3);
                                                 log(err, 1, 2);
@@ -367,9 +378,10 @@ if (isMainThread) {
                 // console.log(buf)
                 for (let x = 0; x < state.udp.length; x++) {
                     if (time - state.udp[x].time >= 2000) {
+                        log("removing stale client id: " + x, 3);
                         state.udp.splice(x, 1);
                         diag.splice(x, 1);
-                        log("removing stale client id: " + x, 3)
+                        sys.worker.esp.postMessage({ type: "udp", obj: state.udp });        // update ESP thread so stagnant UDP client is removed 
                     }
                 }
                 checkUDPreg();
@@ -389,15 +401,28 @@ if (isMainThread) {
                         }
                         // log("incoming esp state: " + buf.obj.name + " data: " + buf.obj.state, 3, 0);
                         break;
+                    case "espFetch":
+                        log("incoming ESP Fetch request from client: " + state.udp[id].name, 3, 0);
+                        for (let x = 0; x < state.esp.entities.length; x++) {
+                            for (let y = 0; y < state.esp.entities[x].length; y++) {
+                                for (let b = 0; b < state.udp[id].esp.length; b++) {
+                                    if (state.udp[id].esp[b] == state.esp.entities[x][y].name) {
+                                        log("sending ESP Device ID: " + b + "  Name:" + state.esp.entities[x][y].name + "  data: " + state.esp.entities[x][y].state, 3, 0);
+                                        udp.send(JSON.stringify({ type: "espStateUpdate", obj: { id: b, state: state.esp.entities[x][y].state } }), port);
+                                    }
+                                }
+                            }
+                        }
+                        break;
                     case "haFetch":     // incoming state fetch request
-                        log("receiving fetch request from client: " + id + " name: " + state.udp[id].name, 3, 0);
+                        log("Client " + id + " - " + a.color("white", state.udp[id].name) + " - requesting fetch", 3, 0);
                         ha.fetch(state.udp[id]);
                         break;
                     case "haQuery":     // HA all device list request
                         logs.haInputs = [];
                         for (let x = 0; x < cfg.homeAssistant.length; x++) {
                             logs.haInputs.push([]);
-                            log("sending all HA (" + a.color("white", cfg.homeAssistant[x].address) + ") entities to UDP", 3, 1);
+                            log("Client: " + state.udp[id].name + " is querying HA (" + a.color("white", cfg.homeAssistant[x].address) + ") entities", 3, 1);
                             hass[x].states.list()
                                 .then(dbuf => { dbuf.forEach(element => { logs.haInputs[x].push(element.entity_id) }); })
                                 .catch(err => {
@@ -409,6 +434,7 @@ if (isMainThread) {
                         break;
                     case "haState":     // incoming state change (Home Assistant)
                         let sensor = undefined;
+                        let haNum;
                         // console.log(buf)
                         for (let y = 0; y < cfg.homeAssistant.length; y++) {
                             for (let z = 0; z < logs.haInputs[y].length; z++) {
@@ -426,14 +452,19 @@ if (isMainThread) {
                             }
                         }
                         if (sensor == undefined) {
-                            log("received invalid HA State setting: " + JSON.stringify(buf), 3, 3); return;
+                            if (buf.obj.unit != undefined && buf.obj.name != undefined) {
+                                //      log("sensor name: " + buf.obj.name + "  value: " + buf.obj.state + " unit: " + buf.obj.unit, 0, 0);
+                                hass[(buf.obj.haID == undefined) ? 0 : buf.obj.haID].states.update('sensor', "sensor." + buf.obj.name,
+                                    { state: Number(buf.obj.state).toFixed(2), attributes: { state_class: 'measurement', unit_of_measurement: buf.obj.unit } });
+                                return;
+                            } else log("received invalid HA State setting: " + JSON.stringify(buf), 3, 3); return;
                         }
                         state.perf.ha[haNum].start = Date.now();
                         state.perf.ha[haNum].wait = true;
                         state.perf.ha[haNum].id = state.ha[haNum].ws.id;
                         let sort = ["input_boolean", "input_button", "switch"];
                         if (buf.obj.unit == undefined) {
-                            log("UDP receive HA State Set, name: " + buf.obj.name + " value: " + buf.obj.state, 3, 0);
+                            log("Client: " + state.udp[id].name + " is setting HA entity: " + buf.obj.name + " to value: " + buf.obj.state, 3, 0);
                             for (let x = 0; x < sort.length; x++) {
                                 if (buf.obj.name) {
                                     if (buf.obj.name.includes(sort[x])) {
@@ -458,11 +489,6 @@ if (isMainThread) {
                             }
                             return;
                         }
-                        if (buf.obj.unit != undefined && buf.obj.name != undefined) {
-                            //    log("sensor test, name: " + buf.obj.name + " value: " + buf.obj.state + " unit: " + buf.obj.unit, 0, 0);
-                            hass[haNum].states.update('sensor', "sensor." + buf.obj.name,
-                                { state: Number(buf.obj.state).toFixed(2), attributes: { state_class: 'measurement', unit_of_measurement: buf.obj.unit } });
-                        }
                         break;
                     case "register":    // incoming registrations
                         state.udp[id].name = buf.name;
@@ -472,8 +498,11 @@ if (isMainThread) {
                             buf.obj.ha.forEach(element => { state.udp[id].ha.push(element) });
                         }
                         if (buf.obj.esp != undefined) {
-                            buf.obj.esp.forEach(element => { state.udp[id].esp.push(element) });
-                            log("client " + id + " - " + a.color("white", buf.name) + " - is registering ESP entities", 3, 1);
+                            buf.obj.esp.forEach(element => {
+                                log("client " + id + " - " + a.color("white", buf.name) + " - is registering ESP entity - "
+                                    + a.color("green", element), 3, 1);
+                                state.udp[id].esp.push(element)
+                            });
                         }
                         if (buf.obj.telegram != undefined && buf.obj.telegram == true) {
                             log("client " + id + " - " + a.color("white", buf.name) + " - is registering as telegram agent", 3, 1);
@@ -485,17 +514,20 @@ if (isMainThread) {
                         log(buf.obj.message, buf.obj.mod, buf.obj.level, port);
                         break;
                     case "diag":        // incoming UDP client Diag
-                        //       log("receiving diag")
+                        //console.log(buf)
                         // console.log(buf.obj);
-                        let diagBuf = { ha: [], esp: [], auto: [] };
+                        let diagBuf = { auto: [], ha: [], esp: [], };
                         if (buf.obj.state.ha)
                             for (let x = 0; x < buf.obj.state.ha.length; x++) {
-                                diagBuf.ha.push({ name: state.udp[id].ha[x], state: buf.obj.state.ha[x] })
+                                diagBuf.ha.push({ name: state.udp[id].ha[x], state: buf.obj.state.ha[x] });
                             }
                         if (buf.obj.state.esp)
                             for (let x = 0; x < buf.obj.state.esp.length; x++) {
-                                diagBuf.esp.push({ name: state.udp[id].esp[x], state: buf.obj.state.esp[x] })
+                                diagBuf.esp.push({ name: state.udp[id].esp[x], state: buf.obj.state.esp[x] });
                             }
+                        for (let x = 0; x < buf.obj.state.auto.length; x++) {
+                            diagBuf.auto.push(buf.obj.state.auto[x]);
+                        }
                         diag[id] = { name: state.udp[id].name, ip: state.udp[id].ip, state: diagBuf }
                         break;
                     case "telegram":
@@ -531,14 +563,19 @@ if (isMainThread) {
                             udp.send(JSON.stringify({ type: "udpReRegister" }), port);
                         }
                     }
+
                 }
             },
             ipc: function (data) {      // Incoming inter process communication 
                 //     console.log(data)
                 switch (data.type) {
                     case "espState": state.esp = data.obj; break;
+                    case "espStateUpdate": state.esp.entities[data.obj.id][data.obj.io].state = data.obj.state; break;
                     case "log": sys.log(data.obj[0], data.obj[1], data.obj[2]); break;
-                    case "udpSend": udp.send(JSON.stringify({ type: data.obj.type, obj: data.obj.obj }), data.port); break;
+                    case "udpSend":
+                        udp.send(JSON.stringify({ type: data.obj.type, obj: data.obj.obj }), data.port);
+
+                        break;
                 }
             },
             lib: function () {
@@ -638,7 +675,7 @@ if (isMainThread) {
                         "[Install]",
                         "WantedBy=multi-user.target\n",
                         "[Service]",
-                        "ExecStart=nodemon " + cfg.workingDir + "/core.js -w " + cfg.workingDir + "/core.js",
+                        "ExecStart=nodemon " + cfg.workingDir + "core.js -w " + cfg.workingDir + "core.js",
                         "Type=simple",
                         "User=root",
                         "Group=root",
@@ -758,7 +795,7 @@ if (!isMainThread) {
     const data = workerData;
     if (data.threadId === "ESP") {
         let espClient = [],
-            state = { esp: { discover: [], entities: [], }, udp: {} };
+            state = { esp: { discover: [], entities: [], reconnect: [] }, udp: {}, };
         const
             { Client } = require('@2colors/esphome-native-api'),
             { Discovery } = require('@2colors/esphome-native-api'),
@@ -793,15 +830,20 @@ if (!isMainThread) {
             espInit();                                                              // start the init sequence
             function espInit() {                                                    // create a new client for every ESP device in the local object
                 for (let x = 0; x < cfg.esp.devices.length; x++) {
+                    if (state.esp.reconnect[x] == undefined) state.esp.reconnect.push(false);  // create reconnect flag to prevent repeated logging of esp reconnect attempts
                     espClient.push(clientNew(x));
                     state.esp.entities.push([]);                                    // create entity array for each ESP device
                     clientConnect(x);
                 }
             }
             function clientConnect(x) {
-                log("connecting to esp module: " + a.color("white", cfg.esp.devices[x].ip), 2);       // client connection function, ran for each ESP device
+                if (state.esp.reconnect[x] == false) {
+                    log("connecting to esp module: " + a.color("white", cfg.esp.devices[x].ip), 2);       // client connection function, ran for each ESP device
+                }
                 espClient[x].connect();
                 espClient[x].on('newEntity', entity => {
+                    if (state.esp.reconnect[x] == true) log("ESP module: " + a.color("white", cfg.esp.devices[x].ip + " is reconnected"), 2, 2)
+                    state.esp.reconnect[x] = false;
                     let exist = 0;
                     for (let e = 0; e < state.esp.entities[x].length; e++) {        // scan for this entity in the entity list
                         if (state.esp.entities[x][e].id == entity.id) exist++;
@@ -820,14 +862,16 @@ if (!isMainThread) {
                         for (let y = 0; y < state.esp.entities[x].length; y++) {
                             if (state.esp.entities[x][y].id == data.key) {          // identify this entity request with local object
                                 //      log("esp data: " + state.esp.entities[x][y].name + " state: " + data.state, 2, 0)
+                                parentPort.postMessage({ type: "espStateUpdate", obj: { id: x, io: y, state: data.state }, });
                                 for (let a = 0; a < state.udp.length; a++) {        // scan all the UDP clients and find which one cares about this entity
                                     for (let b = 0; b < state.udp[a].esp.length; b++) {                 // scan each UDP clients registered ESP entity list
                                         if (state.udp[a].esp[b] == state.esp.entities[x][y].name) {     // if there's a match, send UDP client the data
                                             parentPort.postMessage({
                                                 type: "udpSend",
                                                 obj: { type: "espStateUpdate", obj: { id: b, state: data.state }, },
-                                                port: state.udp[a].port
+                                                port: state.udp[a].port,
                                             });
+                                            //  console.log("UDP Client: " + a + " esp: " + b + " state: ", data);
                                             break;
                                         }
                                     }
@@ -838,7 +882,10 @@ if (!isMainThread) {
                 });
                 espClient[x].on('error', (error) => {
                     //  console.log(error);
-                    log("ESP module went offline, resetting ESP system", 2, 2);
+                    if (state.esp.reconnect[x] == false) {
+                        log("ESP module went offline, resetting ESP system", 2, 2);
+                        state.esp.reconnect[x] = true;
+                    }
                     reset();                                                        // if there's a connection problem, start reset sequence
                 });
             }
@@ -850,14 +897,15 @@ if (!isMainThread) {
                     reconnect: true,
                     reconnectInterval: 5000,
                     pingInterval: 3000,
-                    pingAttempts: 3
+                    pingAttempts: 3,
+                    tryReconnect: false,
                 })
             }
             function reset() {
-                em.emit('ws-disconnect');                                               // close and reset websocket service (because removeAllListeners)
                 em.removeAllListeners();                                                // remove all event listeners 
                 for (let c = 0; c < espClient.length; c++) espClient[c].disconnect();   // disconnect every client 
-                espClient = [];                                                         // delete all client objects 
+                espClient = [];
+                state.esp.entities = [];                                                  // delete all client objects 
                 setTimeout(() => { espInit(); }, 100);                                  // reconnect to every device
             }
             parentPort.postMessage({ type: "espState", obj: state.esp });
@@ -866,6 +914,7 @@ if (!isMainThread) {
             //   console.log(data.obj);
             //     log("incominig esp state request Data: " + data.obj, 2, 0);
             switch (data.type) {
+                case "udp": state.udp = data.obj; break;                            // state.udp is where all the TW Client modules store ESP assignments
                 case "config":
                     cfg = data.obj;
                     log("ESP Discovery initiated...", 2);
@@ -876,7 +925,6 @@ if (!isMainThread) {
                     log("ESP connections initiating...", 2);
                     esp();
                     break;
-                case "udp": state.udp = data.obj; break;
                 case "espSend":
                     em.emit(data.obj.name, data.obj.id, data.obj.state);
                     break;
