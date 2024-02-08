@@ -12,13 +12,13 @@ let
             "myEspEntity",                  // this index order is used for incoming state events and output calls as well (ie state.esp[0] etc...)
         ]
     },
-    automation = [                                                          // create a (index) => {},  array member function for each automation 
-        (index) => {
-            let time = Math.floor(Date.now() / 1000 / 60)                   // set the epoch time for this function, used for counting time in minutes, you can remove "60" if you need seconds and also remove "1000" if you need MS
-            if (!state.auto[index]) {                                       // this block gets run once
+    automation = [                                                          // create an (index, clock) => {},  array member function for each automation 
+        (index, clock) => {
+            time.sync();                                                    // sync the time.  time.sec time.min are global vars containing epoch time  
+            if (!state.auto[index]) {         // this block gets run once
                 state.auto.push({                                           // create object for this automation, 
-                    name: "Auto-System",                                    //   give it a name and 
-                    fan: { started: false, step: time, ha: {} }             //   create an object for each of this automation's devices or features     
+                    name: "Auto-System",                                    // give it a name and 
+                    fan: { started: false, step: time.sec, ha: {} }         // create an object for each of this automation's devices or features     
                 });
                 setInterval(() => { automation[index](index); }, 1e3);      // set minimum rerun time, otherwise this automation function will only on ESP and HA events
                 log("system started", index, 1);                            // log automation start with index number and severity 
@@ -39,37 +39,81 @@ let
                     ha.send(3, false);
                 }
             };
+            if (clock) {                                                    
+                var day = clock.day, dow = clock.dow, hour = clock.hour, min = clock.min;
+                if (hour == 18 && min == 0) {
+                    log("turning on outside lights");
+                    ha.send("switch.light_outside_switch", true);
+                }
+                if (hour == 22 && min == 0) {
+                    log("turning off outside lights");
+                    ha.send("switch.light_outside_switch", false);
+                }
+            };
         }
     ];
 let
-    user = {        // user configurable block - Telegram and timer function.  
-        timer: function (day, dow, hour, min) {     // these functions are called once every min,hour,day. Use time.min time.hour and time.day for comparison 
-            if (hour == 18 && min == 0) {           // example, turn on some entities at 6pm and turn off qt midnight 
-                log("turning on outside lights");
-                ha.send("switch.light_outside_switch", true);
-                ha.send(2, true);
-            }
-            if (hour == 0 && min == 0) {
-                log("turning off outside lights");
-                ha.send("switch.light_outside_switch", false);
-                ha.send(2, false);
-            }
-        },
-        telegram: { // enter a case matching your desireable input, 
-            agent: function (msg) { },
-            response: function (msg) { }, // enter a two character code to identify your callback "case" 
+    user = {        // user configurable block - Telegram 
+        telegram: { // enter a case matching your desireable input
+            agent: function (msg) {
+                //  log("incoming telegram message: " + msg, 0, 0);
+                //  console.log("incoming telegram message: ", msg);
+                if (sys.telegram.auth(msg)) {
+                    switch (msg.text) {
+                        case "?": onsole.log("test help menu"); break;
+                        case "/start": bot(msg.chat.id, "you are already registered");; break;
+                        case "R":   // to include uppercase letter in case match, we put no break between upper and lower cases
+                        case "r":
+                            bot(msg.from.id, "Test Menu:");
+                            setTimeout(() => {      // delay to ensure menu Title gets presented first in Bot channel
+                                sys.telegram.buttonToggle(msg, "t1", "Test Button");
+                                setTimeout(() => {      // delay to ensure menu Title gets presented first in Bot channel
+                                    sys.telegram.buttonMulti(msg, "t2", "Test Choices", ["test1", "test2", "test3"]);
+                                }, 200);
+                            }, 200);
+                            break;
+                        default:
+                            log("incoming telegram message - unknown command - " + JSON.stringify(msg.text), 0, 0);
+                            break;
+                    }
+                }
+                else if (msg.text == cfg.telegram.password) sys.telegram.sub(msg);
+                else if (msg.text == "/start") bot(msg.chat.id, "give me the passcode");
+                else bot(msg.chat.id, "i don't know you, go away");
+
+            },
+            response: function (msg) {  // enter a two character code to identify your callback "case" 
+                let code = msg.data.slice(0, 2);
+                let data = msg.data.slice(2);
+                switch (code) {
+                    case "t1":  // read button input and toggle corresponding function
+                        if (data == "true") { myFunction(true); break; }
+                        if (data == "false") { myFunction(false); break; }
+                        break;
+                    case "t2":  // read button input and perform actions
+                        switch (data) {
+                            case "test1": bot.sendMessage(msg.from.id, log("test1", "Telegram", 0)); break;
+                            case "test2": bot.sendMessage(msg.from.id, log("test2", "Telegram", 0)); break;
+                            case "test3": bot.sendMessage(msg.from.id, log("test3", "Telegram", 0)); break;
+                        }
+                        break;
+                }       // create a function for use with your callback
+                function myFunction(newState) {    // function that reads the callback input and toggles corresponding boolean in Home Assistant
+                    bot.sendMessage(msg.from.id, "Test State: " + newState);
+                }
+            },
         },
     },
-    sys = {         // you don't need to modify anything below this line
+    sys = {
         boot: function (step) {
             switch (step) {
                 case 0:
                     sys.lib();
                     console.log("Loading non-volatile data...");
-                    fs.readFile(workingDir + "/nv-client.json", function (err, data) {
+                    fs.readFile(workingDir + "/nv-" + cfg.moduleName + ".json", function (err, data) {
                         if (err) {
                             log("\x1b[33;1mNon-Volatile Storage does not exist\x1b[37;m"
-                                + "\nnv-client.json file should be in same folder as client.js file");
+                                + ", nv-clientName.json file should be in same folder as client.js file");
                             nv = { telegram: [] };
                         }
                         else { nv = JSON.parse(data); }
@@ -81,14 +125,27 @@ let
                     setTimeout(() => { sys.boot(1); }, 1e3);
                     break;
                 case 1:
-                    if (cfg.ha) { ha.fetch(); confirmFetch(); }
+                    if (cfg.ha) { send("haFetch"); confirmHA(); }
                     else setTimeout(() => { automation.forEach((func, index) => { func(index) }); }, 1e3);
-                    function confirmFetch() {
+                    if (cfg.esp) {
+                        if (!cfg.ha) confirmESP();
+                        send("espFetch");
+                    }
+                    function confirmHA() {
                         setTimeout(() => {
-                            if (state.online == false) {
+                            if (state.onlineHA == false) {
                                 log("TW-Core isn't online yet or fetch is failing, retrying...", 2);
-                                ha.fetch();
-                                confirmFetch();
+                                send("haFetch");
+                                confirmHA();
+                            }
+                        }, 10e3);
+                    }
+                    function confirmESP() {
+                        setTimeout(() => {
+                            if (state.onlineESP == false) {
+                                log("TW-Core isn't online yet or fetch is failing, retrying...", 2);
+                                send("espFetch");
+                                confirmESP();
                             }
                         }, 10e3);
                     }
@@ -102,8 +159,8 @@ let
                 exec = require('child_process').exec,
                 execSync = require('child_process').execSync,
                 workingDir = require('path').dirname(require.main.filename),
-                udpServer = require('dgram'),
-                udp = udpServer.createSocket('udp4');
+                udpClient = require('dgram'),
+                udp = udpClient.createSocket('udp4');
         },
         com: function () {
             udp.on('message', function (data, info) {
@@ -112,21 +169,23 @@ let
                     //  console.log(buf);
                     switch (buf.type) {
                         case "espStateUpdate":      // incoming state change (from ESP)
-                            automation.forEach((func, index) => { if (state.auto[index]) func(index) });
-                            //   console.log("receiving esp data, ID: " + buf.obj.id + " state: " + buf.obj.state);
+                            // console.log("receiving esp data, ID: " + buf.obj.id + " state: " + buf.obj.state);
+                            state.onlineESP = true;
+                            // if (buf.obj.id == 0) { state.esp[buf.obj.id] = 1.0; }
                             state.esp[buf.obj.id] = buf.obj.state;
-                            em.emit('state' + cfg.esp[buf.obj.id]);
+                            em.emit(cfg.esp[buf.obj.id], buf.obj.state);
+                            automation.forEach((func, index) => { if (state.auto[index]) func(index) });
                             break;
                         case "haStateUpdate":       // incoming state change (from HA websocket service)
-                            log("receiving state data, entity: " + cfg.ha[buf.obj.id] + " value: " + state.ha[buf.obj.id], 0);
-                            automation.forEach((func, index) => { if (state.auto[index]) func(index) });
+                            log("receiving state data, entity: " + cfg.ha[buf.obj.id] + " value: " + buf.obj.state, 0);
                             state.ha[buf.obj.id] = buf.obj.state;
-                            em.emit('state' + cfg.ha[buf.obj.id]);
+                            em.emit(cfg.ha[buf.obj.id], buf.obj.state);
+                            automation.forEach((func, index) => { if (state.auto[index]) func(index) });
                             break;
                         case "haFetchReply":        // Incoming HA Fetch result
                             state.ha = (buf.obj);
                             log("receiving fetch data: " + state.ha);
-                            state.online = true;
+                            state.onlineHA = true;
                             automation.forEach((func, index) => { func(index) });
                             break;
                         case "haQueryReply":        // HA device query
@@ -134,23 +193,24 @@ let
                             break;
                         case "udpReRegister":       // reregister request from server
                             log("server lost sync, reregistering...");
-                            sys.register();
-                            if (cfg.ha != undefined) { ha.fetch(); }
+                            setTimeout(() => {
+                                sys.register();
+                                if (cfg.ha != undefined) { send("haFetch"); }
+                            }, 1e3);
                             break;
                         case "diag":                // incoming diag refresh request, then reply object
-                            diag = { state: state, nv: nv }
-                            send("diag", diag);
+                            send("diag", { state: state, nv: nv, test: "test" });
                             break;
                         case "telegram":
                             switch (buf.obj.class) {
                                 case "agent":
-                                    user.telegram.agent(buf.obj.data);
+                                    telegram.agent(buf.obj.data);
                                     break;
                             }
                             break;
                         case "timer":
-                            user.timer(buf.obj.day, buf.obj.dow, buf.obj.hour, buf.obj.min);
-                            time = { day: buf.obj.day, dow: buf.obj.dow, hour: buf.obj.hour, min: buf.obj.min };
+                            let timeBuf = { day: buf.obj.day, dow: buf.obj.dow, hour: buf.obj.hour, min: buf.obj.min };
+                            automation.forEach((func, index) => { if (state.auto[index]) func(index, timeBuf) });
                             break;
                         case "log": console.log(buf.obj); break;
                     }
@@ -196,9 +256,9 @@ let
         file: {
             write: {
                 nv: function () {  // write non-volatile memory to the disk
-                    log("writing Client NV data...")
-                    fs.writeFile(workingDir + "/client-nv-bak.json", JSON.stringify(nv), function () {
-                        fs.copyFile(workingDir + "/client-nv-bak.json", workingDir + "/client-nv.json", (err) => {
+                    // log("writing NV data...")
+                    fs.writeFile(workingDir + "/nv-" + cfg.moduleName + "-bak.json", JSON.stringify(nv), function () {
+                        fs.copyFile(workingDir + "/nv-" + cfg.moduleName + "-bak.json", workingDir + "/nv-" + cfg.moduleName + ".json", (err) => {
                             if (err) throw err;
                         });
                     });
@@ -244,25 +304,27 @@ let
             },
         },
     },
-    esp = {
-        send: function (name, state) { send("espState", { name: name, state: state }) }
-    },
+    esp = { send: function (name, state) { send("espState", { name: name, state: state }) } },
     ha = {
-        fetch: function () { send("haFetch") },
         getEntities: function () { send("haQuery") },
-        send: function (name, state, unit, ip) {
-            if (isFinite(Number(name)) == true) send("haState", { name: cfg.ha[name], state: state, unit: unit, ip: ip });
-            else send("haState", { name: name, state: state, unit: unit, ip: ip });
+        send: function (name, state, unit, id) {  // if ID is not expressed for sensor, then sensor data will be send to HA system 0
+            if (isFinite(Number(name)) == true) send("haState", { name: cfg.ha[name], state: state, unit: unit, haID: id });
+            else send("haState", { name: name, state: state, unit: unit, haID: id });
         }
     },
-    state = { ha: [], esp: [], auto: [], online: false },
-    nv = {},
-    time = {},
-    diag = {};
+    state = { auto: [], ha: [], esp: [], onlineHA: false, onlineESP: false },
+    time = {
+        sec: null, min: null,
+        sync: function () {
+            this.sec = Math.floor(Date.now() / 1000);
+            this.min = Math.floor(Date.now() / 1000 / 60);
+        }
+    },
+    nv = {};
 setTimeout(() => { sys.boot(0); }, 1e3);
 function bot(id, data, obj) { send("telegram", { class: "send", id: id, data: data, obj: obj }) }
-function send(type, obj, name) { udp.send(JSON.stringify({ type: type, obj: obj, name: name }), 65432, 'localhost') }
+function send(type, obj, name) { udp.send(JSON.stringify({ type: type, obj: obj, name: name }), 65432, '127.0.0.1') }
 function log(message, index, level) {
-    if (!level) send("log", { message: message, mod: cfg.moduleName, level: index });
+    if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
     else send("log", { message: message, mod: state.auto[index].name, level: level });
 }
