@@ -1,4 +1,4 @@
-*If you have a question, please just open a dialog in the “issue” section so others can benefit from the discussion.*
+*If you have a question, please open a dialog in the “issue” section so others can benefit from the discussion.*
 
 *This project is interested in collaborating with integration of the Zigbee2mqtt NodeJS API* https://www.npmjs.com/package/zigbee2mqtt 
 
