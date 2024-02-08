@@ -40,7 +40,7 @@ A key point is the remarkable responsiveness of the HA Core API, averaging 2-5ms
 * Has full support for HA Websocket API
 * System keeps track of HA latency and availability and notifies you if something is wrong
 * Adds industrial level reliability to Home Assistant
-* Gives Home Assistant full support of automation with NodeJS
+* Gives Home Assistant full ability to create automations with NodeJS
 * Supports multiple home assistant server connections
 * Can be used as a relay agent for Home Assistant
 * Can synchronize two separate Home Assistants
