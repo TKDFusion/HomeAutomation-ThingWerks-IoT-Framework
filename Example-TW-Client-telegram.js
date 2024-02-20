@@ -1,18 +1,5 @@
 // this an example of telegram remote control, this going inside the tw-client.js file
-
 user = {        // user configurable block - Telegram and timer function.  
-    timer: {    // these functions are called once every min,hour,day. Use time.min time.hour and time.day for comparison 
-        everyMin: function () {
-            //  if (time.hour == 10 && time.min == 30)  // will execute every 10:30am
-
-        },
-        everyHour: function () {
-
-        },
-        everyDay: function () {
-
-        },
-    },
     telegram: { // enter a case matching your desireable input
         agent: function (msg) {
             //  log("incoming telegram message: " + msg, 0, 0);
