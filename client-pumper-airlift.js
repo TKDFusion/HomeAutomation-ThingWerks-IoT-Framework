@@ -8,6 +8,7 @@ let
         },
         ha: [
             "input_boolean.auto_compressor",
+            "input_boolean.compressor_timer",
         ],
         esp: [
             "raw-tank-lth",
@@ -17,6 +18,7 @@ let
             {   // DD system 2 example
                 name: "LTH-Well",       // Demand Delivery system name
                 haAuto: 0,              // home assistant auto toggle ID number (specified below in cfg.ha config)
+                haTimer: 1,
                 pump: [
                     { role: "single", name: "Compressor", type: "esp", id: 1 },
                 ],
@@ -41,10 +43,10 @@ let
                 unit: "m",              // measurement unit (i.e. PSI or meters) "m" or "psi" only
                 type: "esp",
                 id: 0,
-                stop: 4.0,             // Demand Delivery system stop level in (meters) or PSI
-                start: 3.5,            // Demand Delivery system start level (meters) or PSI
+                stop: 3.98,             // Demand Delivery system stop level in (meters) or PSI
+                start: 3.96,            // Demand Delivery system start level (meters) or PSI
                 warn: 2.75,             // threshold to send warning notification
-                average: 40,            // amount of samples to average over
+                average: 5,            // amount of samples to average over
                 voltageMin: 0.475,      // calibration, minimum value when sensor is at atmospheric pressure 
                 pressureRating: 15,     // max rated pressure of transducer
             },
@@ -65,11 +67,11 @@ let
             if (state.auto[index] == undefined) init();
             if (clock) {    // called every minute
                 var day = clock.day, dow = clock.dow, hour = clock.hour, min = clock.min;
-                if (hour == 10 && min == 0) {
-                    ha.send("input_boolean.auto_compressor", true);
+                if (hour == 8 && min == 0) {
+                    if (state.ha[cfg.dd[0].haTimer] == true) ha.send("input_boolean.auto_compressor", true);
                 }
-                if (hour == 16 && min == 0) {
-                    ha.send("input_boolean.auto_compressor", false);
+                if (hour == 18 && min == 0) {
+                    if (state.ha[cfg.dd[0].haTimer] == true) ha.send("input_boolean.auto_compressor", false);
                 }
                 if (hour == 7 && min == 30) {
                     for (let x = 0; x < cfg.dd.length; x++) { state.auto[index].dd[x].warn.flowDaily = false; } // reset low flow daily warning
@@ -95,7 +97,7 @@ let
                                         }
                                         if (dd.state.timeoutOff == true) {  // after pump has been off for a while
                                             if (dd.pump[0].state === true) {
-                                                log(dd.cfg.name + " - pump running in HA but not here - switching pump ON", index, 1);
+                                                log(dd.cfg.name + " - pump running in HA/ESP but not here - switching pump ON", index, 1);
                                                 pumpStart(true);
                                                 return;
                                             } else {
@@ -207,6 +209,7 @@ let
                 if (dd.sensor.pressOut.state.meters >= (dd.sensor.pressOut.cfg.stop + .12) && dd.fault.flowOver == false) {
                     log(dd.cfg.name + " - " + dd.sensor.pressOut.cfg.name + " is overflowing (" + dd.sensor.pressOut.state.meters
                         + dd.sensor.pressOut.cfg.unit + ") - possible SSR or hardware failure", index, 3);
+                    pumpStop();
                     dd.fault.flowOver = true;
                 }
                 function pumpStart(sendOut) {
@@ -418,7 +421,6 @@ let
                             ? state.esp[cfg.press[x].id] : state.ha[cfg.press[x].id],
                         out: state.auto[index].press[x]
                     };
-
                     if (press.out.step < press.cfg.average) { press.out.raw[press.out.step++] = press.state; }
                     else { press.out.step = 0; press.out.raw[press.out.step++] = press.state; }
                     for (let y = 0; y < press.out.raw.length; y++) calc.sum += press.out.raw[y];
@@ -434,20 +436,9 @@ let
                     press.out.psi = (calc.psi < 0.0) ? 0 : Number(calc.psi.toFixed(2));
                     press.out.meters = (calc.meters < 0.0) ? 0 : Number(calc.meters.toFixed(2));
                     press.out.percent = (calc.percent[2] < 0.0) ? 0 : calc.percent[2];
-                    if (state.auto[index].ha.pushLast[pos] == undefined) {
-                        state.auto[index].ha.pushLast.push(press.out.percent);
-                        sendData();
-                    }
-                    else if (state.auto[index].ha.pushLast[pos] != press.out.percent) {
-                        state.auto[index].ha.pushLast[pos] = press.out.percent;
-                        sendData();
-                    }
-                    pos++;
-                    function sendData(){
-                        send(press.cfg.name + "_percent", press.out.percent.toFixed(1), '%');
-                        send(press.cfg.name + "_meters", press.out.meters.toFixed(3), 'm');
-                        send(press.cfg.name + "_psi", press.out.psi.toFixed(3), 'psi');
-                    }
+                    send(press.cfg.name + "_percent", press.out.percent.toFixed(0), '%');
+                    send(press.cfg.name + "_meters", press.out.meters.toFixed(2), 'm');
+                    send(press.cfg.name + "_psi", press.out.psi.toFixed(2), 'psi');
                 }
                 function send(name, value, unit) { setTimeout(() => { ha.send(name, value, unit) }, sendDelay); sendDelay += 25; }
             }
@@ -491,8 +482,8 @@ let
                 //  console.log("incoming telegram message: ", msg);
                 if (sys.telegram.auth(msg)) {
                     switch (msg.text) {
-                        case "?": onsole.log("test help menu"); break;
-                        case "/start": bot(msg.chat.id, "you are already registered");; break;
+                        case "?": console.log("test help menu"); break;
+                        case "/start": bot(msg.chat.id, "you are already registered"); break;
                         case "R":   // to include uppercase letter in case match, we put no break between upper and lower cases
                         case "r":
                             bot(msg.from.id, "Test Menu:");
@@ -548,26 +539,29 @@ let
                             nv = { telegram: [] };
                         }
                         else { nv = JSON.parse(data); }
+                        sys.boot(1);
                     });
+                    break;
+                case 1:
                     sys.checkArgs();
                     sys.com();
                     sys.register();
-                    setInterval(() => { sys.heartBeat(); }, 1e3);
-                    setTimeout(() => { sys.boot(1); }, 1e3);
+                    setTimeout(() => { sys.boot(2); }, 3e3);
                     break;
-                case 1:
+                case 2:
+                    state.online = true;
+                    setInterval(() => { sys.heartBeat(); }, 1e3);
                     if (cfg.ha) { send("haFetch"); confirmHA(); }
-
                     else setTimeout(() => { automation.forEach((func, index) => { func(index) }); }, 1e3);
                     if (cfg.esp) {
                         if (!cfg.ha) confirmESP();
                         send("espFetch");
-
                     }
                     function confirmHA() {
                         setTimeout(() => {
                             if (state.onlineHA == false) {
                                 log("TW-Core isn't online yet or fetch is failing, retrying...", 2);
+                                sys.register();
                                 send("haFetch");
                                 confirmHA();
                             }
@@ -601,25 +595,35 @@ let
                 if (buf.type != "async") {
                     //  console.log(buf);
                     switch (buf.type) {
-                        case "espStateUpdate":      // incoming state change (from ESP)
+                        case "espState":      // incoming state change (from ESP)
                             // console.log("receiving esp data, ID: " + buf.obj.id + " state: " + buf.obj.state);
                             state.onlineESP = true;
                             // if (buf.obj.id == 0) { state.esp[buf.obj.id] = 1.0; }
                             state.esp[buf.obj.id] = buf.obj.state;
-                            em.emit(cfg.esp[buf.obj.id], buf.obj.state);
-                            automation.forEach((func, index) => { if (state.auto[index]) func(index) });
+                            if (state.online == true) {
+                                em.emit(cfg.esp[buf.obj.id], buf.obj.state);
+                                automation.forEach((func, index) => { if (state.auto[index]) func(index) });
+                            }
                             break;
                         case "haStateUpdate":       // incoming state change (from HA websocket service)
                             log("receiving state data, entity: " + cfg.ha[buf.obj.id] + " value: " + buf.obj.state, 0);
+                   //         console.log(buf);
                             state.ha[buf.obj.id] = buf.obj.state;
-                            em.emit(cfg.ha[buf.obj.id], buf.obj.state);
-                            automation.forEach((func, index) => { if (state.auto[index]) func(index) });
+                            if (state.online == true) {
+                                em.emit(cfg.ha[buf.obj.id], buf.obj.state);
+                                automation.forEach((func, index) => { if (state.auto[index]) func(index) });
+                            }
                             break;
                         case "haFetchReply":        // Incoming HA Fetch result
                             state.ha = (buf.obj);
                             log("receiving fetch data: " + state.ha);
                             state.onlineHA = true;
                             automation.forEach((func, index) => { func(index) });
+                            break;
+                        case "haFetchAgain":        // Core is has reconnected to HA, so do a refetch
+                            state.ha = (buf.obj);
+                            log("Core has reconnected to HA, fetching again");
+                            send("espFetch");
                             break;
                         case "haQueryReply":        // HA device query
                             console.log("Available HA Devices: " + buf.obj);
@@ -637,13 +641,15 @@ let
                         case "telegram":
                             switch (buf.obj.class) {
                                 case "agent":
-                                    telegram.agent(buf.obj.data);
+                                    user.telegram.agent(buf.obj.data);
                                     break;
                             }
                             break;
                         case "timer":
                             let timeBuf = { day: buf.obj.day, dow: buf.obj.dow, hour: buf.obj.hour, min: buf.obj.min };
-                            automation.forEach((func, index) => { if (state.auto[index]) func(index, timeBuf) });
+                            if (state.online == true) {
+                                automation.forEach((func, index) => { if (state.auto[index]) func(index, timeBuf) });
+                            }
                             break;
                         case "log": console.log(buf.obj); break;
                     }
@@ -651,16 +657,23 @@ let
             });
         },
         register: function () {
+            log("registering with TW-Core");
             let obj = {};
             if (cfg.ha != undefined) obj.ha = cfg.ha;
             if (cfg.esp != undefined) obj.esp = cfg.esp;
             if (cfg.telegram != undefined) obj.telegram = true;
             send("register", obj, cfg.moduleName);
+            if (nv.telegram != undefined) {
+                log("registering telegram users with TW-Core");
+                for (let x = 0; x < nv.telegram.length; x++) {
+                    send("telegram", { class: "sub", id: nv.telegram[x].id });
+                }
+            }
         },
         heartBeat: function () { send("heartBeat") },
         checkArgs: function () {
             if (process.argv[2] == "-i") {
-                moduleName = path.basename(__filename);
+                moduleName = path.basename(__filename).slice(0, -3);
                 log("installing TW-Client-" + moduleName + " service...");
                 let service = [
                     "[Unit]",
@@ -706,6 +719,7 @@ let
                     log("telegram - user just joined the group - " + msg.from.first_name + " " + msg.from.last_name + " ID: " + msg.from.id, 0, 2);
                     nv.telegram.push(buf);
                     bot(msg.chat.id, 'registered');
+                    send("telegram", { class: "sub", id: msg.from.id });
                     sys.file.write.nv();
                 } else bot(msg.chat.id, 'already registered');
             },
@@ -746,7 +760,7 @@ let
             else send("haState", { name: name, state: state, unit: unit, haID: id });
         }
     },
-    state = { auto: [], ha: [], esp: [], onlineHA: false, onlineESP: false },
+    state = { auto: [], ha: [], esp: [], onlineHA: false, onlineESP: false, online: false },
     time = {
         sec: null, min: null,
         sync: function () {
