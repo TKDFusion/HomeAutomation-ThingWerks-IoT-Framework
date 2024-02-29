@@ -14,27 +14,27 @@ let
             "raw-tank-lth",
             "relay1",
         ],
-        dd: [       // config for the Demand/Delivery automation function, 1 object for each pump system
-            {   // DD system 2 example
+        dd: [       // config for the Demand/Delivery automation function, 1 object for each DD system
+            {   // DD system example
                 name: "LTH-Well",       // Demand Delivery system name
                 ha: {
-                    auto: 0,              // home assistant auto toggle ID number (specified below in cfg.ha config)
-                    timer: 1,
+                    auto: 0,            // home assistant auto toggle ID number (specified above in cfg.ha config)
+                    timer: 1,           // home assistant timer toggle ID number (specified above in cfg.ha config)
                 },
                 pump: [
                     {
-                        id: 1,                  
-                        type: "esp",
+                        id: 1,              // ESP/HA cfg input number
+                        type: "esp",        
                         class: "single",
                         name: "Compressor",
                     },
                 ],
-                press: {                // pressure sensor number (in press block)
-                    output: 0,
+                press: {                
+                    output: 0,          // pressure sensor number (in cfg.press block)
                     input: undefined
                 },
                 flow: {
-                    id: undefined,
+                    id: undefined,      // flow sensor number (in cfg.flow block)
                     startWarn: 70,      // min start flow before triggering notification (useful for filters)
                     startError: 20,     // minimum flow rate pump must reach at start
                     startWait: 6,       // seconds to wait before checking flow after pump starts
