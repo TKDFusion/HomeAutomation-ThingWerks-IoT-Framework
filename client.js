@@ -134,7 +134,7 @@ let
                             break;
                         case "haStateUpdate":       // incoming state change (from HA websocket service)
                             log("receiving state data, entity: " + cfg.ha[buf.obj.id] + " value: " + buf.obj.state, 0);
-                   //         console.log(buf);
+                            //         console.log(buf);
                             state.ha[buf.obj.id] = buf.obj.state;
                             if (state.online == true) {
                                 em.emit(cfg.ha[buf.obj.id], buf.obj.state);
@@ -303,4 +303,5 @@ function log(message, index, level) {
     if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
     else send("log", { message: message, mod: state.auto[index].name, level: level });
 }
+
 
