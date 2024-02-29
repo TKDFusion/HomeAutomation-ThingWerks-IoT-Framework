@@ -53,57 +53,6 @@ let
         }
     ];
 let
-    user = {        // user configurable block - Telegram 
-        telegram: { // enter a case matching your desireable input
-            agent: function (msg) {
-                //  log("incoming telegram message: " + msg, 0, 0);
-                //  console.log("incoming telegram message: ", msg);
-                if (sys.telegram.auth(msg)) {
-                    switch (msg.text) {
-                        case "?": onsole.log("test help menu"); break;
-                        case "/start": bot(msg.chat.id, "you are already registered");; break;
-                        case "R":   // to include uppercase letter in case match, we put no break between upper and lower cases
-                        case "r":
-                            bot(msg.from.id, "Test Menu:");
-                            setTimeout(() => {      // delay to ensure menu Title gets presented first in Bot channel
-                                sys.telegram.buttonToggle(msg, "t1", "Test Button");
-                                setTimeout(() => {      // delay to ensure menu Title gets presented first in Bot channel
-                                    sys.telegram.buttonMulti(msg, "t2", "Test Choices", ["test1", "test2", "test3"]);
-                                }, 200);
-                            }, 200);
-                            break;
-                        default:
-                            log("incoming telegram message - unknown command - " + JSON.stringify(msg.text), 0, 0);
-                            break;
-                    }
-                }
-                else if (msg.text == cfg.telegram.password) sys.telegram.sub(msg);
-                else if (msg.text == "/start") bot(msg.chat.id, "give me the passcode");
-                else bot(msg.chat.id, "i don't know you, go away");
-
-            },
-            response: function (msg) {  // enter a two character code to identify your callback "case" 
-                let code = msg.data.slice(0, 2);
-                let data = msg.data.slice(2);
-                switch (code) {
-                    case "t1":  // read button input and toggle corresponding function
-                        if (data == "true") { myFunction(true); break; }
-                        if (data == "false") { myFunction(false); break; }
-                        break;
-                    case "t2":  // read button input and perform actions
-                        switch (data) {
-                            case "test1": bot.sendMessage(msg.from.id, log("test1", "Telegram", 0)); break;
-                            case "test2": bot.sendMessage(msg.from.id, log("test2", "Telegram", 0)); break;
-                            case "test3": bot.sendMessage(msg.from.id, log("test3", "Telegram", 0)); break;
-                        }
-                        break;
-                }       // create a function for use with your callback
-                function myFunction(newState) {    // function that reads the callback input and toggles corresponding boolean in Home Assistant
-                    bot.sendMessage(msg.from.id, "Test State: " + newState);
-                }
-            },
-        },
-    },
     sys = {
         boot: function (step) {
             switch (step) {
@@ -117,14 +66,18 @@ let
                             nv = { telegram: [] };
                         }
                         else { nv = JSON.parse(data); }
+                        sys.boot(1);
                     });
+                    break;
+                case 1:
                     sys.checkArgs();
                     sys.com();
                     sys.register();
-                    setInterval(() => { sys.heartBeat(); }, 1e3);
-                    setTimeout(() => { sys.boot(1); }, 1e3);
+                    setTimeout(() => { sys.boot(2); }, 3e3);
                     break;
-                case 1:
+                case 2:
+                    state.online = true;
+                    setInterval(() => { sys.heartBeat(); }, 1e3);
                     if (cfg.ha) { send("haFetch"); confirmHA(); }
                     else setTimeout(() => { automation.forEach((func, index) => { func(index) }); }, 1e3);
                     if (cfg.esp) {
@@ -135,6 +88,7 @@ let
                         setTimeout(() => {
                             if (state.onlineHA == false) {
                                 log("TW-Core isn't online yet or fetch is failing, retrying...", 2);
+                                sys.register();
                                 send("haFetch");
                                 confirmHA();
                             }
@@ -168,25 +122,35 @@ let
                 if (buf.type != "async") {
                     //  console.log(buf);
                     switch (buf.type) {
-                        case "espStateUpdate":      // incoming state change (from ESP)
+                        case "espState":      // incoming state change (from ESP)
                             // console.log("receiving esp data, ID: " + buf.obj.id + " state: " + buf.obj.state);
                             state.onlineESP = true;
                             // if (buf.obj.id == 0) { state.esp[buf.obj.id] = 1.0; }
                             state.esp[buf.obj.id] = buf.obj.state;
-                            em.emit(cfg.esp[buf.obj.id], buf.obj.state);
-                            automation.forEach((func, index) => { if (state.auto[index]) func(index) });
+                            if (state.online == true) {
+                                em.emit(cfg.esp[buf.obj.id], buf.obj.state);
+                                automation.forEach((func, index) => { if (state.auto[index]) func(index) });
+                            }
                             break;
                         case "haStateUpdate":       // incoming state change (from HA websocket service)
                             log("receiving state data, entity: " + cfg.ha[buf.obj.id] + " value: " + buf.obj.state, 0);
+                   //         console.log(buf);
                             state.ha[buf.obj.id] = buf.obj.state;
-                            em.emit(cfg.ha[buf.obj.id], buf.obj.state);
-                            automation.forEach((func, index) => { if (state.auto[index]) func(index) });
+                            if (state.online == true) {
+                                em.emit(cfg.ha[buf.obj.id], buf.obj.state);
+                                automation.forEach((func, index) => { if (state.auto[index]) func(index) });
+                            }
                             break;
                         case "haFetchReply":        // Incoming HA Fetch result
                             state.ha = (buf.obj);
                             log("receiving fetch data: " + state.ha);
                             state.onlineHA = true;
                             automation.forEach((func, index) => { func(index) });
+                            break;
+                        case "haFetchAgain":        // Core is has reconnected to HA, so do a refetch
+                            state.ha = (buf.obj);
+                            log("Core has reconnected to HA, fetching again");
+                            send("espFetch");
                             break;
                         case "haQueryReply":        // HA device query
                             console.log("Available HA Devices: " + buf.obj);
@@ -204,13 +168,15 @@ let
                         case "telegram":
                             switch (buf.obj.class) {
                                 case "agent":
-                                    telegram.agent(buf.obj.data);
+                                    user.telegram.agent(buf.obj.data);
                                     break;
                             }
                             break;
                         case "timer":
                             let timeBuf = { day: buf.obj.day, dow: buf.obj.dow, hour: buf.obj.hour, min: buf.obj.min };
-                            automation.forEach((func, index) => { if (state.auto[index]) func(index, timeBuf) });
+                            if (state.online == true) {
+                                automation.forEach((func, index) => { if (state.auto[index]) func(index, timeBuf) });
+                            }
                             break;
                         case "log": console.log(buf.obj); break;
                     }
@@ -218,38 +184,46 @@ let
             });
         },
         register: function () {
+            log("registering with TW-Core");
             let obj = {};
             if (cfg.ha != undefined) obj.ha = cfg.ha;
             if (cfg.esp != undefined) obj.esp = cfg.esp;
             if (cfg.telegram != undefined) obj.telegram = true;
             send("register", obj, cfg.moduleName);
+            if (nv.telegram != undefined) {
+                log("registering telegram users with TW-Core");
+                for (let x = 0; x < nv.telegram.length; x++) {
+                    send("telegram", { class: "sub", id: nv.telegram[x].id });
+                }
+            }
         },
         heartBeat: function () { send("heartBeat") },
         checkArgs: function () {
             if (process.argv[2] == "-i") {
-                log("installing TW-Client-" + cfg.moduleName + " service...");
+                moduleName = path.basename(__filename).slice(0, -3);
+                log("installing TW-Client-" + moduleName + " service...");
                 let service = [
                     "[Unit]",
                     "Description=\n",
                     "[Install]",
                     "WantedBy=multi-user.target\n",
                     "[Service]",
-                    "ExecStart=nodemon " + cfg.workingDir + "/client.js -w " + cfg.workingDir + "/client.js",
+                    "ExecStart=nodemon " + cfg.workingDir + "client-" + moduleName + ".js -w " + cfg.workingDir + "client-" + moduleName + ".js",
                     "Type=simple",
                     "User=root",
                     "Group=root",
                     "WorkingDirectory=" + cfg.workingDir,
                     "Restart=on-failure\n",
                 ];
-                fs.writeFileSync("/etc/systemd/system/tw-client.service", service.join("\n"));
+                fs.writeFileSync("/etc/systemd/system/tw-client-" + moduleName + ".service", service.join("\n"));
                 // execSync("mkdir /apps/ha -p");
                 // execSync("cp " + process.argv[1] + " /apps/ha/");
                 execSync("systemctl daemon-reload");
-                execSync("systemctl enable tw-client.service");
-                execSync("systemctl start tw-client");
-                execSync("service tw-client status");
+                execSync("systemctl enable tw-client-" + moduleName + ".service");
+                execSync("systemctl start tw-client-" + moduleName);
+                execSync("service tw-client-" + moduleName + " status");
                 log("service installed and started");
-                console.log("type: journalctl -f -u tw-client");
+                console.log("type: journalctl -fu tw-client-" + moduleName);
                 process.exit();
             }
         },
@@ -272,6 +246,7 @@ let
                     log("telegram - user just joined the group - " + msg.from.first_name + " " + msg.from.last_name + " ID: " + msg.from.id, 0, 2);
                     nv.telegram.push(buf);
                     bot(msg.chat.id, 'registered');
+                    send("telegram", { class: "sub", id: msg.from.id });
                     sys.file.write.nv();
                 } else bot(msg.chat.id, 'already registered');
             },
@@ -312,7 +287,7 @@ let
             else send("haState", { name: name, state: state, unit: unit, haID: id });
         }
     },
-    state = { auto: [], ha: [], esp: [], onlineHA: false, onlineESP: false },
+    state = { auto: [], ha: [], esp: [], onlineHA: false, onlineESP: false, online: false },
     time = {
         sec: null, min: null,
         sync: function () {
@@ -328,3 +303,4 @@ function log(message, index, level) {
     if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
     else send("log", { message: message, mod: state.auto[index].name, level: level });
 }
+
