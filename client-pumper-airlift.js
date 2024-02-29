@@ -23,13 +23,13 @@ let
                 },
                 pump: [
                     {
-                        id: 1,
+                        id: 1,                  
                         type: "esp",
                         class: "single",
                         name: "Compressor",
                     },
                 ],
-                press: {
+                press: {                // pressure sensor number (in press block)
                     output: 0,
                     input: undefined
                 },
@@ -40,20 +40,19 @@ let
                     startWait: 6,       // seconds to wait before checking flow after pump starts
                 },
                 fault: {
-
+                    retry: 10,          // time in seconds to wait for retry
+                    retryFinal: 2,      // time in minutes to wait for final retry
+                    runLong: 10,        // max run time
+                    cycleCount: 3,      // max cycle times per cycleTime window
+                    cycleTime: 120,     // max cycleTime time window  (in seconds)
                 },
-                // faultFlowRetry: 10,     // time in seconds to wait for retry
-                // faultFlowFinal: 2,      // time in minutes to wait for final retry
-                // faultRunLong: 10,       // max run time
-                faultCycleCount: 3,     // max cycle times per cycleTime window
-                faultCycleTime: 120,    // max cycleTime time window  (in seconds)
             },
         ],
         press: [     // config for tanks used with Home Assistant -- these tanks get sent back to HA as sensors
             {   // Tank 1 example
                 name: "tank_lth",       // tank name (do not use spaces or dash, underscore only)
                 unit: "m",              // measurement unit (i.e. PSI or meters) "m" or "psi" only
-                type: "esp",            // the sensor is "ha" or "esp" 
+                type: "esp",            // the sensor ID in "ha" or "esp" block
                 id: 0,                  // HA or ESP ID number, corresponds to array number (zero indexed) 
                 stop: 3.98,             // Demand Delivery system stop level in (meters) or PSI
                 start: 3.95,            // Demand Delivery system start level (meters) or PSI
@@ -144,7 +143,7 @@ let
                                     pumpStop();
                                     return;
                                 }
-                                if (time.sec - dd.state.timerRun >= dd.cfg.faultRunLong * 60) {
+                                if (time.sec - dd.state.timerRun >= dd.cfg.fault.runLong * 60) {
                                     log(dd.cfg.name + " - pump: " + dd.pump[0].name + " - max runtime exceeded - DD system shutting down", index, 3);
                                     ha.send(dd.auto.name, false);
                                     dd.auto.state = false;
@@ -158,14 +157,14 @@ let
                                             dd.fault.flowRestarts++;
                                             flowTimer[x] = setTimeout(() => {
                                                 dd.fault.flow = false; log(dd.cfg.name + " - pump restating", index, 1);
-                                            }, dd.cfg.faultFlowRetry * 1000);
+                                            }, dd.cfg.fault.retry * 1000);
                                         } else if (dd.fault.flowRestarts == 3) {
                                             log(dd.cfg.name + " - low flow (" + dd.flow.lm.toFixed(1) + "lm) HA State: "
-                                                + dd.pump[0].state + " - retries exceeded - going offline for " + dd.cfg.faultFlowFinal + "m", index, 3);
+                                                + dd.pump[0].state + " - retries exceeded - going offline for " + dd.cfg.fault.retryFinal + "m", index, 3);
                                             dd.fault.flowRestarts++;
                                             flowTimer[x] = setTimeout(() => {
                                                 dd.fault.flow = false; log(dd.cfg.name + " - pump restating", index, 1);
-                                            }, dd.cfg.faultFlowFinal * 60 * 1000);
+                                            }, dd.cfg.fault.retryFinal * 60 * 1000);
                                         }
                                         else {
                                             dd.fault.flowRestarts++;
@@ -227,8 +226,8 @@ let
                 function pumpStart(sendOut) {
                     if (dd.state.cycleCount == 0) {
                         dd.state.cycleTimer = time.sec;
-                    } else if (dd.state.cycleCount > dd.cfg.faultCycleCount) {
-                        if (time.sec - dd.state.cycleTimer < dd.cfg.faultCycleTime) {
+                    } else if (dd.state.cycleCount > dd.cfg.fault.cycleCount) {
+                        if (time.sec - dd.state.cycleTimer < dd.cfg.fault.cycleTime) {
                             log(dd.cfg.name + " - pump is cycling to frequently - DD system shutting down", index, 3);
                             ha.send(dd.auto.name, false);
                             dd.auto.state = false;
@@ -369,9 +368,9 @@ let
                         auto: { state: state.ha[cfg.dd[x].ha.auto], name: cfg.ha[cfg.dd[x].ha.auto] },
                         press: {
                             in: {},
-                            out: (cfg.dd[x].press.out != undefined) ? {
-                                cfg: cfg.press[cfg.dd[x].press.out],
-                                state: state.auto[index].press[cfg.dd[x].press.output]
+                            out: (cfg.dd[x].press.output != undefined) ? {
+                                cfg: cfg.press[cfg.dd[x].press.output],
+                                state: state.auto[index].press[cfg.press[cfg.dd[x].press.output].id]
                             } : undefined,
                         },
                         flow: (cfg.dd[x].flow.id != undefined) ? state.auto[index].flow[cfg.dd[x].flow.id] : undefined,
