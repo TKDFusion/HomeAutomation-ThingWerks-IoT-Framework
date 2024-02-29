@@ -17,17 +17,30 @@ let
         dd: [       // config for the Demand/Delivery automation function, 1 object for each pump system
             {   // DD system 2 example
                 name: "LTH-Well",       // Demand Delivery system name
-                haAuto: 0,              // home assistant auto toggle ID number (specified below in cfg.ha config)
-                haTimer: 1,
+                ha: {
+                    auto: 0,              // home assistant auto toggle ID number (specified below in cfg.ha config)
+                    timer: 1,
+                },
                 pump: [
-                    { role: "single", name: "Compressor", type: "esp", id: 1 },
+                    {
+                        id: 1,
+                        type: "esp",
+                        class: "single",
+                        name: "Compressor",
+                    },
                 ],
-                pressOut: 0,
+                press: {
+                    output: 0,
+                    input: undefined
+                },
                 flow: {
                     id: undefined,
                     startWarn: 70,      // min start flow before triggering notification (useful for filters)
                     startError: 20,     // minimum flow rate pump must reach at start
                     startWait: 6,       // seconds to wait before checking flow after pump starts
+                },
+                fault: {
+
                 },
                 // faultFlowRetry: 10,     // time in seconds to wait for retry
                 // faultFlowFinal: 2,      // time in minutes to wait for final retry
@@ -67,10 +80,10 @@ let
             if (clock) {    // called every minute
                 var day = clock.day, dow = clock.dow, hour = clock.hour, min = clock.min;
                 if (hour == 8 && min == 0) {
-                    if (state.ha[cfg.dd[0].haTimer] == true) ha.send("input_boolean.auto_compressor", true);
+                    if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", true);
                 }
                 if (hour == 18 && min == 0) {
-                    if (state.ha[cfg.dd[0].haTimer] == true) ha.send("input_boolean.auto_compressor", false);
+                    if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", false);
                 }
                 if (hour == 7 && min == 30) {
                     for (let x = 0; x < cfg.dd.length; x++) { state.auto[index].dd[x].warn.flowDaily = false; } // reset low flow daily warning
@@ -353,12 +366,12 @@ let
                             haLag: false,
                             tankLow: false,
                         },
-                        auto: { state: state.ha[cfg.dd[x].haAuto], name: cfg.ha[cfg.dd[x].haAuto] },
+                        auto: { state: state.ha[cfg.dd[x].ha.auto], name: cfg.ha[cfg.dd[x].ha.auto] },
                         press: {
                             in: {},
-                            out: (cfg.dd[x].pressOut != undefined) ? {
-                                cfg: cfg.press[cfg.dd[x].pressOut],
-                                state: state.auto[index].press[cfg.dd[x].pressOut]
+                            out: (cfg.dd[x].press.out != undefined) ? {
+                                cfg: cfg.press[cfg.dd[x].press.out],
+                                state: state.auto[index].press[cfg.dd[x].press.output]
                             } : undefined,
                         },
                         flow: (cfg.dd[x].flow.id != undefined) ? state.auto[index].flow[cfg.dd[x].flow.id] : undefined,
