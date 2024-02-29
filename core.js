@@ -105,7 +105,7 @@ if (isMainThread) {
                                     client.pingsLost = 0;
                                     let timeFinish = new Date().getMilliseconds();
                                     let timeResult = timeFinish - client.timeStart;
-                                    if (timeResult > 100) log("websocket (" + a.color("white", config.address) + ") ping is lagging - delay is: " + timeResult + "ms", 1, 2);
+                                    if (timeResult > 500) log("websocket (" + a.color("white", config.address) + ") ping is lagging - delay is: " + timeResult + "ms", 1, 2);
                                     break;
                                 case "auth_required":
                                     log("Websocket (" + a.color("white", config.address) + ") authenticating", 1);
@@ -575,7 +575,6 @@ if (isMainThread) {
                         log("Client: " + state.udp[x].name + " has crashed!!", 3, 3);
                         state.udp.splice(x, 1);
                         diag.splice(x, 1);
-                        sys.worker.esp.postMessage({ type: "udp", obj: state.udp });        // update ESP thread so stagnant UDP client is removed 
                     }
                 }
             },
@@ -600,7 +599,7 @@ if (isMainThread) {
                                     for (let b = 0; b < state.udp[a].esp.length; b++) {                 // scan each UDP clients registered ESP entity list
                                         if (state.udp[a].esp[b] == state.esp.entities[data.obj.id][data.obj.io].name) {     // if there's a match, send UDP client the data
                                             udp.send(JSON.stringify({ type: "espState", obj: { id: b, state: data.obj.state } }), state.udp[a].port);
-                                         //   console.log("UDP Client: " + a + " esp: " + b + " state: ", data);
+                                            //   console.log("UDP Client: " + a + " esp: " + b + " state: ", data);
                                             break;
                                         }
                                     }
