@@ -407,7 +407,6 @@ let
                     calcFlow();
                     pushSensor();
                 }, 1e3);
-
             }
             function pushSensor() {
                 let sendDelay = 0;
