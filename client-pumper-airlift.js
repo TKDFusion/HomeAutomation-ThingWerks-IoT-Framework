@@ -53,8 +53,8 @@ let
         flow: [      // config for flow meters used with Home Assistant -- these flow meters get sent back to HA as sensors
             {   // flow meter 1 example
                 name: "flow",           // flow meter name that will appear in HA as a sensor (do not use spaces or dash, underscore only)
-                type: "esp",
-                id: 2,
+                type: "esp",            // the sensor is "ha" or "esp" 
+                id: 2,                  // HA or ESP ID number, corresponds to array number (zero indexed) 
                 pulse: 0.2,             // pulse calculation factor for your specific flow meter
                 unit: "m3",             // unit of measurement (cubic meters)
             }
