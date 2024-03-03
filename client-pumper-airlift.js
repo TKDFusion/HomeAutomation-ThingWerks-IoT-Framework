@@ -23,13 +23,13 @@ let
                 },
                 pump: [
                     {
-                        id: 1,              // ESP/HA cfg input number
-                        type: "esp",        
+                        id: 1,              // ESP/HA cfg ID number
+                        type: "esp",
                         class: "single",
                         name: "Compressor",
                     },
                 ],
-                press: {                
+                press: {
                     output: 0,          // pressure sensor number (in cfg.press block)
                     input: undefined
                 },
@@ -42,7 +42,7 @@ let
                 fault: {
                     retry: 10,          // time in seconds to wait for retry
                     retryFinal: 2,      // time in minutes to wait for final retry
-                    runLong: 10,        // max run time
+                    runLong: 480,       // max run time in minutes
                     cycleCount: 3,      // max cycle times per cycleTime window
                     cycleTime: 120,     // max cycleTime time window  (in seconds)
                 },
@@ -78,17 +78,15 @@ let
             if (state.auto[index] == undefined) init();
             if (clock) {    // called every minute
                 var day = clock.day, dow = clock.dow, hour = clock.hour, min = clock.min;
-                if (hour == 8 && min == 0) {
-                    if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", true);
-                }
                 if (hour == 18 && min == 0) {
                     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", false);
                 }
                 if (hour == 7 && min == 30) {
                     for (let x = 0; x < cfg.dd.length; x++) { state.auto[index].dd[x].warn.flowDaily = false; } // reset low flow daily warning
+                    if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", true);
                 }
                 calcFlowMeter();
-                sys.file.write.nv();
+                file.write.nv();
                 for (let x = 0; x < cfg.dd.length; x++) { state.auto[index].dd[x].warn.flowFlush = false; }
             }
             for (let x = 0; x < cfg.dd.length; x++) {   // enumerate every demand delivery instance
@@ -328,7 +326,7 @@ let
                             for (let y = 0; y < 30; y++) nv.flow[x].day.push(0);
                         }
                         log("writing NV data to disk...", index, 1);
-                        sys.file.write.nv();
+                        file.write.nv();
                     }
                     for (let x = 0; x < cfg.flow.length; x++) {
                         state.auto[index].flow.push({ lm: 0, temp: undefined, hour: 0, day: 0, batch: 0 })
@@ -491,7 +489,7 @@ let
             agent: function (msg) {
                 //  log("incoming telegram message: " + msg, 0, 0);
                 //  console.log("incoming telegram message: ", msg);
-                if (sys.telegram.auth(msg)) {
+                if (telegram.auth(msg)) {
                     switch (msg.text) {
                         case "?": console.log("test help menu"); break;
                         case "/start": bot(msg.chat.id, "you are already registered"); break;
@@ -499,9 +497,9 @@ let
                         case "r":
                             bot(msg.from.id, "Test Menu:");
                             setTimeout(() => {      // delay to ensure menu Title gets presented first in Bot channel
-                                sys.telegram.buttonToggle(msg, "t1", "Test Button");
+                                telegram.buttonToggle(msg, "t1", "Test Button");
                                 setTimeout(() => {      // delay to ensure menu Title gets presented first in Bot channel
-                                    sys.telegram.buttonMulti(msg, "t2", "Test Choices", ["test1", "test2", "test3"]);
+                                    telegram.buttonMulti(msg, "t2", "Test Choices", ["test1", "test2", "test3"]);
                                 }, 200);
                             }, 200);
                             break;
@@ -510,7 +508,7 @@ let
                             break;
                     }
                 }
-                else if (msg.text == cfg.telegram.password) sys.telegram.sub(msg);
+                else if (msg.text == cfg.telegram.password) telegram.sub(msg);
                 else if (msg.text == "/start") bot(msg.chat.id, "give me the passcode");
                 else bot(msg.chat.id, "i don't know you, go away");
 
@@ -538,12 +536,118 @@ let
         },
     },
     sys = {
+        init: function () {
+            nv = {};
+            state = { auto: [], ha: [], esp: [], onlineHA: false, onlineESP: false, online: false };
+            time = {
+                sec: null, min: null,
+                sync: function () {
+                    this.sec = Math.floor(Date.now() / 1000);
+                    this.min = Math.floor(Date.now() / 1000 / 60);
+                }
+            };
+            esp = { send: function (name, state) { send("espState", { name: name, state: state }) } };
+            ha = {
+                getEntities: function () { send("haQuery") },
+                send: function (name, state, unit, id) {  // if ID is not expressed for sensor, then sensor data will be send to HA system 0
+                    if (isFinite(Number(name)) == true) send("haState", { name: cfg.ha[name], state: state, unit: unit, haID: id });
+                    else send("haState", { name: name, state: state, unit: unit, haID: id });
+                }
+            };
+            fs = require('fs');
+            events = require('events');
+            em = new events.EventEmitter();
+            exec = require('child_process').exec;
+            execSync = require('child_process').execSync;
+            workingDir = require('path').dirname(require.main.filename);
+            path = require('path');
+            scriptName = path.basename(__filename).slice(0, -3);
+            udpClient = require('dgram');
+            udp = udpClient.createSocket('udp4');
+            if (process.argv[2] == "-i") {
+                log("installing TW-Client-" + moduleName + " service...");
+                let service = [
+                    "[Unit]",
+                    "Description=\n",
+                    "[Install]",
+                    "WantedBy=multi-user.target\n",
+                    "[Service]",
+                    "ExecStart=nodemon " + cfg.workingDir + "client-" + moduleName + ".js -w " + cfg.workingDir + "client-" + moduleName + ".js",
+                    "Type=simple",
+                    "User=root",
+                    "Group=root",
+                    "WorkingDirectory=" + cfg.workingDir,
+                    "Restart=on-failure\n",
+                ];
+                fs.writeFileSync("/etc/systemd/system/tw-client-" + moduleName + ".service", service.join("\n"));
+                // execSync("mkdir /apps/ha -p");
+                // execSync("cp " + process.argv[1] + " /apps/ha/");
+                execSync("systemctl daemon-reload");
+                execSync("systemctl enable tw-client-" + moduleName + ".service");
+                execSync("systemctl start tw-client-" + moduleName);
+                execSync("service tw-client-" + moduleName + " status");
+                log("service installed and started");
+                console.log("type: journalctl -fu tw-client-" + moduleName);
+                process.exit();
+            }
+            file = {
+                write: {
+                    nv: function () {  // write non-volatile memory to the disk
+                        // log("writing NV data...")
+                        fs.writeFile(workingDir + "/nv-" + scriptName + "-bak.json", JSON.stringify(nv), function () {
+                            fs.copyFile(workingDir + "/nv-" + scriptName + "-bak.json", workingDir + "/nv-" + scriptName + ".json", (err) => {
+                                if (err) throw err;
+                            });
+                        });
+                    }
+                },
+            };
+            telegram = {
+                sub: function (msg) {
+                    let buf = { user: msg.from.first_name + " " + msg.from.last_name, id: msg.from.id }
+                    if (!telegram.auth(msg)) {
+                        log("telegram - user just joined the group - " + msg.from.first_name + " " + msg.from.last_name + " ID: " + msg.from.id, 0, 2);
+                        nv.telegram.push(buf);
+                        bot(msg.chat.id, 'registered');
+                        send("telegram", { class: "sub", id: msg.from.id });
+                        file.write.nv();
+                    } else bot(msg.chat.id, 'already registered');
+                },
+                auth: function (msg) {
+                    let exist = false;
+                    for (let x = 0; x < nv.telegram.length; x++)
+                        if (nv.telegram[x].id == msg.from.id) { exist = true; break; };
+                    if (exist) return true; else return false;
+                },
+                buttonToggle: function (msg, auto, name) {
+                    bot(msg.from.id,
+                        name, {
+                        reply_markup: {
+                            inline_keyboard: [
+                                [
+                                    { text: "on", callback_data: (auto + "true") },
+                                    { text: "off", callback_data: (auto + "false") }
+                                ]
+                            ]
+                        }
+                    }
+                    );
+                },
+                buttonMulti: function (msg, auto, name, array) {
+                    buf = { reply_markup: { inline_keyboard: [[]] } };
+                    array.forEach(element => {
+                        buf.reply_markup.inline_keyboard[0].push({ text: element, callback_data: (auto + element) })
+                    });
+                    bot(msg.from.id, name, buf);
+                },
+            };
+            sys.boot(0);
+        },
         boot: function (step) {
             switch (step) {
                 case 0:
-                    sys.lib();
                     console.log("Loading non-volatile data...");
-                    fs.readFile(workingDir + "/nv-" + cfg.moduleName + ".json", function (err, data) {
+                    fs.readFile(workingDir + "/nv-" + scriptName + ".json", function (err, data) {
                         if (err) {
                             log("\x1b[33;1mNon-Volatile Storage does not exist\x1b[37;m"
                                 + ", nv-clientName.json file should be in same folder as client.js file");
@@ -554,14 +658,13 @@ let
                     });
                     break;
                 case 1:
-                    sys.checkArgs();
                     sys.com();
                     sys.register();
                     setTimeout(() => { sys.boot(2); }, 3e3);
                     break;
                 case 2:
                     state.online = true;
-                    setInterval(() => { sys.heartBeat(); }, 1e3);
+                    setInterval(() => { send("heartBeat") }, 1e3);
                     if (cfg.ha) { send("haFetch"); confirmHA(); }
                     else setTimeout(() => { automation.forEach((func, index) => { func(index) }); }, 1e3);
                     if (cfg.esp) {
@@ -589,16 +692,6 @@ let
                     }
                     break;
             }
-        },
-        lib: function () {
-            fs = require('fs'),
-                events = require('events'),
-                em = new events.EventEmitter(),
-                exec = require('child_process').exec,
-                execSync = require('child_process').execSync,
-                workingDir = require('path').dirname(require.main.filename),
-                udpClient = require('dgram'),
-                udp = udpClient.createSocket('udp4');
         },
         com: function () {
             udp.on('message', function (data, info) {
@@ -681,106 +774,8 @@ let
                 }
             }
         },
-        heartBeat: function () { send("heartBeat") },
-        checkArgs: function () {
-            if (process.argv[2] == "-i") {
-                moduleName = path.basename(__filename).slice(0, -3);
-                log("installing TW-Client-" + moduleName + " service...");
-                let service = [
-                    "[Unit]",
-                    "Description=\n",
-                    "[Install]",
-                    "WantedBy=multi-user.target\n",
-                    "[Service]",
-                    "ExecStart=nodemon " + cfg.workingDir + "client-" + moduleName + ".js -w " + cfg.workingDir + "client-" + moduleName + ".js",
-                    "Type=simple",
-                    "User=root",
-                    "Group=root",
-                    "WorkingDirectory=" + cfg.workingDir,
-                    "Restart=on-failure\n",
-                ];
-                fs.writeFileSync("/etc/systemd/system/tw-client-" + moduleName + ".service", service.join("\n"));
-                // execSync("mkdir /apps/ha -p");
-                // execSync("cp " + process.argv[1] + " /apps/ha/");
-                execSync("systemctl daemon-reload");
-                execSync("systemctl enable tw-client-" + moduleName + ".service");
-                execSync("systemctl start tw-client-" + moduleName);
-                execSync("service tw-client-" + moduleName + " status");
-                log("service installed and started");
-                console.log("type: journalctl -fu tw-client-" + moduleName);
-                process.exit();
-            }
-        },
-        file: {
-            write: {
-                nv: function () {  // write non-volatile memory to the disk
-                    // log("writing NV data...")
-                    fs.writeFile(workingDir + "/nv-" + cfg.moduleName + "-bak.json", JSON.stringify(nv), function () {
-                        fs.copyFile(workingDir + "/nv-" + cfg.moduleName + "-bak.json", workingDir + "/nv-" + cfg.moduleName + ".json", (err) => {
-                            if (err) throw err;
-                        });
-                    });
-                }
-            },
-        },
-        telegram: {
-            sub: function (msg) {
-                let buf = { user: msg.from.first_name + " " + msg.from.last_name, id: msg.from.id }
-                if (!sys.telegram.auth(msg)) {
-                    log("telegram - user just joined the group - " + msg.from.first_name + " " + msg.from.last_name + " ID: " + msg.from.id, 0, 2);
-                    nv.telegram.push(buf);
-                    bot(msg.chat.id, 'registered');
-                    send("telegram", { class: "sub", id: msg.from.id });
-                    sys.file.write.nv();
-                } else bot(msg.chat.id, 'already registered');
-            },
-            auth: function (msg) {
-                let exist = false;
-                for (let x = 0; x < nv.telegram.length; x++)
-                    if (nv.telegram[x].id == msg.from.id) { exist = true; break; };
-                if (exist) return true; else return false;
-            },
-            buttonToggle: function (msg, auto, name) {
-                bot(msg.from.id,
-                    name, {
-                    reply_markup: {
-                        inline_keyboard: [
-                            [
-                                { text: "on", callback_data: (auto + "true") },
-                                { text: "off", callback_data: (auto + "false") }
-                            ]
-                        ]
-                    }
-                }
-                );
-            },
-            buttonMulti: function (msg, auto, name, array) {
-                buf = { reply_markup: { inline_keyboard: [[]] } };
-                array.forEach(element => {
-                    buf.reply_markup.inline_keyboard[0].push({ text: element, callback_data: (auto + element) })
-                });
-                bot(msg.from.id, name, buf);
-            },
-        },
-    },
-    esp = { send: function (name, state) { send("espState", { name: name, state: state }) } },
-    ha = {
-        getEntities: function () { send("haQuery") },
-        send: function (name, state, unit, id) {  // if ID is not expressed for sensor, then sensor data will be send to HA system 0
-            if (isFinite(Number(name)) == true) send("haState", { name: cfg.ha[name], state: state, unit: unit, haID: id });
-            else send("haState", { name: name, state: state, unit: unit, haID: id });
-        }
-    },
-    state = { auto: [], ha: [], esp: [], onlineHA: false, onlineESP: false, online: false },
-    time = {
-        sec: null, min: null,
-        sync: function () {
-            this.sec = Math.floor(Date.now() / 1000);
-            this.min = Math.floor(Date.now() / 1000 / 60);
-        }
-    },
-    nv = {};
-setTimeout(() => { sys.boot(0); }, 1e3);
+    };
+setTimeout(() => { sys.init(); }, 1e3);
 function bot(id, data, obj) { send("telegram", { class: "send", id: id, data: data, obj: obj }) }
 function send(type, obj, name) { udp.send(JSON.stringify({ type: type, obj: obj, name: name }), 65432, '127.0.0.1') }
 function log(message, index, level) {
