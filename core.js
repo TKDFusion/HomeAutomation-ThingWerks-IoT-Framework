@@ -153,8 +153,8 @@ if (isMainThread) {
                                                         else if (ibuf === "off") obuf = false;
                                                         else if (ibuf === null || ibuf == undefined) log("HA (" + a.color("white", config.address) + ") is sending bogus (null/undefined) data: " + ibuf, 1, 2);
                                                         else if (ibuf === "unavailable") {                  // only disconnected ESP modules send this code
-                                                            if (config.log.espDisconnect == true)           // its annoying, see if enabled 
-                                                                log("HA (" + a.color("white", config.address) + "): ESP Module " + buf.event.data.new_state.entity_id + " has gone offline - " + ibuf, 1, 2);
+                                                            if (cfg.telegram.logESPDisconnect == true)           // its annoying, see if enabled 
+                                                                log("HA (" + a.color("white", config.address) + "): ESP Module has gone offline: " + buf.event.data.new_state.entity_id + ibuf, 1, 2);
                                                         }
                                                         else if (!isNaN(parseFloat(Number(ibuf))) == true   // check if data is float
                                                             && isFinite(Number(ibuf)) == true && Number(ibuf) != null) obuf = ibuf;
@@ -373,12 +373,8 @@ if (isMainThread) {
                 }
             },
             udp: function (data, info) {
-                let buf,
-                    port = info.port,
-                    registered = false,
-                    id = undefined,
-                    haNum = undefined,
-                    time = Date.now();
+                let buf, port = info.port, registered = false, id = undefined,
+                    haNum = undefined, time = Date.now();
                 try { buf = JSON.parse(data); }
                 catch (error) { log("A UDP client (" + info.address + ") is sending invalid JSON data: " + error, 3, 3); return; }
                 // console.log(buf)
@@ -610,7 +606,7 @@ if (isMainThread) {
                                 break;
                         }
                         break;
-                    case "log": sys.log(data.obj[0], data.obj[1], data.obj[2]); break;
+                    case "log": log(data.obj[0], data.obj[1], data.obj[2]); break;
                     case "udpSend":
 
                         break;
@@ -641,18 +637,83 @@ if (isMainThread) {
                         vbuf = op + '\x1b[3' + c + bold + input + '\x1b[37;m';
                         return vbuf;
                     }
-                },
-                    util = require('util'),
-                    exec = require('child_process').exec,
-                    execSync = require('child_process').execSync,
-                    HomeAssistant = require('homeassistant'),
-                    expressLib = require("express"),
-                    express = expressLib(),
-                    WebSocketClient = require('websocket').client,
-                    events = require('events'),
-                    em = new events.EventEmitter(),
-                    udpServer = require('dgram'),
-                    udp = udpServer.createSocket('udp4');
+                };
+                util = require('util');
+                exec = require('child_process').exec;
+                execSync = require('child_process').execSync;
+                HomeAssistant = require('homeassistant');
+                expressLib = require("express");
+                express = expressLib();
+                WebSocketClient = require('websocket').client;
+                events = require('events');
+                em = new events.EventEmitter();
+                udpServer = require('dgram');
+                udp = udpServer.createSocket('udp4');
+                file = {
+                    write: {
+                        nv: function () {  // write non-volatile memory to the disk
+                            log("writing NV data...")
+                            fs.writeFile(workingDir + "/nv-bak.json", JSON.stringify(nv), function () {
+                                fs.copyFile(workingDir + "/nv-bak.json", workingDir + "/nv.json", (err) => {
+                                    if (err) throw err;
+                                });
+                            });
+                        }
+                    },
+                };
+                log = function (message, mod, level, port) {      // add a new case with the name of your automation function
+                    let
+                        buf = sys.time.sync(), cbuf = buf + "\x1b[3", lbuf = "", mbuf = "", ubuf = buf + "\x1b[3";
+                    if (level == undefined) level = 1;
+                    switch (level) {
+                        case 0: ubuf += "6"; cbuf += "6"; lbuf += "|--debug--|"; break;
+                        case 1: ubuf += "4"; cbuf += "7"; lbuf += "|  Event  |"; break;
+                        case 2: ubuf += "3"; cbuf += "3"; lbuf += "|*Warning*|"; break;
+                        case 3: ubuf += "1"; cbuf += "1"; lbuf += "|!!ERROR!!|"; break;
+                        case 4: ubuf += "5"; cbuf += "5"; lbuf += "|~~DTEST~~|"; break;
+                        default: ubuf += "4"; cbuf += "4"; lbuf += "|  Event  |"; break;
+                    }
+                    buf += lbuf;
+                    cbuf += "m" + lbuf + "\x1b[37;m";
+                    ubuf += ";1m" + lbuf + "\x1b[37;m";
+                    switch (mod) {      // add a new case with the name of your automation function, starting at case 3
+                        case 0: mbuf += " system | "; break;
+                        case 1: mbuf += "     HA | "; break;
+                        case 2: mbuf += "    ESP | "; break;
+                        case 3: mbuf += "    UDP | "; break;
+                        case 4: mbuf += "Telegram| "; break;
+                        default:
+                            if (mod != undefined) ubuf += mod + " | ";
+                            else mbuf += " system | ";
+                            break;
+                    }
+                    buf += mbuf + message;
+                    cbuf += mbuf + message;
+                    ubuf += mbuf + message;
+                    if (logs.sys[logs.step] == undefined) logs.sys.push(buf);
+                    else logs.sys[logs.step] = buf;
+                    if (logs.step < 500) logs.step++; else logs.step = 0;
+                    if (cfg.telegram != undefined && cfg.telegram.enable == true && state.telegram.started == true) {
+                        if (level >= cfg.telegram.logLevel
+                            || level == 0 && cfg.telegram.logDebug == true) {
+                            for (let x = 0; x < state.telegram.users.length; x++) {
+                                if (cfg.telegram.logESPDisconnect == false) {
+                                    if (!message.includes("ESP module went offline, resetting ESP system:")
+                                        || !message.includes("ESP module is reconnected: ")
+                                        || !message.includes("ESP Module has gone offline: ")) {
+                                        bot.sendMessage(state.telegram.users[x], buf);
+                                    }
+                                } else bot.sendMessage(state.telegram.users[x], buf);
+                            }
+                        }
+                    }
+                    if (port != undefined) {
+                        console.log(ubuf);
+                        udp.send(JSON.stringify({ type: "log", obj: ubuf }), port);
+                    } else if (level == 0 && cfg.debugging == true) console.log(cbuf);
+                    else if (level != 0) console.log(cbuf);
+                    return buf;
+                };
             },
             init: function () { // initialize system volatile memory
                 state = { udp: [], ha: [], perf: { ha: [] } };
@@ -702,7 +763,7 @@ if (isMainThread) {
                     };
                 }
                 state.esp = { discover: [], entities: [] };
-                state.telegram = { started: false, users: [] }
+                state.telegram = { started: false, users: [] };
             },
             checkArgs: function () {
                 if (process.argv[2] == "-i") {
@@ -731,65 +792,6 @@ if (isMainThread) {
                     console.log("type: journalctl -f -u tw-core");
                     process.exit();
                 }
-            },
-            log: function (message, mod, level, port) {      // add a new case with the name of your automation function
-                let
-                    buf = sys.time.sync(), cbuf = buf + "\x1b[3", lbuf = "", mbuf = "", ubuf = buf + "\x1b[3";
-                if (level == undefined) level = 1;
-                switch (level) {
-                    case 0: ubuf += "6"; cbuf += "6"; lbuf += "|--debug--|"; break;
-                    case 1: ubuf += "4"; cbuf += "7"; lbuf += "|  Event  |"; break;
-                    case 2: ubuf += "3"; cbuf += "3"; lbuf += "|*Warning*|"; break;
-                    case 3: ubuf += "1"; cbuf += "1"; lbuf += "|!!ERROR!!|"; break;
-                    case 4: ubuf += "5"; cbuf += "5"; lbuf += "|~~DTEST~~|"; break;
-                    default: ubuf += "4"; cbuf += "4"; lbuf += "|  Event  |"; break;
-                }
-                buf += lbuf;
-                cbuf += "m" + lbuf + "\x1b[37;m";
-                ubuf += ";1m" + lbuf + "\x1b[37;m";
-                switch (mod) {      // add a new case with the name of your automation function, starting at case 3
-                    case 0: mbuf += " system | "; break;
-                    case 1: mbuf += "     HA | "; break;
-                    case 2: mbuf += "    ESP | "; break;
-                    case 3: mbuf += "    UDP | "; break;
-                    case 4: mbuf += "Telegram| "; break;
-                    default:
-                        if (mod != undefined) ubuf += mod + " | ";
-                        else mbuf += " system | ";
-                        break;
-                }
-                buf += mbuf + message;
-                cbuf += mbuf + message;
-                ubuf += mbuf + message;
-                if (logs.sys[logs.step] == undefined) logs.sys.push(buf);
-                else logs.sys[logs.step] = buf;
-                if (logs.step < 500) logs.step++; else logs.step = 0;
-                if (cfg.telegram != undefined && cfg.telegram.enable == true && state.telegram.started == true) {
-                    if (level >= cfg.telegram.logLevel
-                        || level == 0 && cfg.telegram.logDebug == true) {
-                        for (let x = 0; x < state.telegram.users.length; x++) {
-                            bot.sendMessage(state.telegram.users[x], buf);
-                        }
-                    }
-                }
-                if (port != undefined) {
-                    console.log(ubuf);
-                    udp.send(JSON.stringify({ type: "log", obj: ubuf }), port);
-                } else if (level == 0 && cfg.debugging == true) console.log(cbuf);
-                else if (level != 0) console.log(cbuf);
-                return buf;
-            },
-            file: {
-                write: {
-                    nv: function () {  // write non-volatile memory to the disk
-                        log("writing NV data...")
-                        fs.writeFile(workingDir + "/nv-bak.json", JSON.stringify(nv), function () {
-                            fs.copyFile(workingDir + "/nv-bak.json", workingDir + "/nv.json", (err) => {
-                                if (err) throw err;
-                            });
-                        });
-                    }
-                },
             },
             time: {
                 sync: function () {
@@ -827,43 +829,49 @@ if (isMainThread) {
             worker: {},
         };
     sys.boot(0);
-    function log(...buf) { sys.log(...buf) }
 }
 if (!isMainThread) {
     const data = workerData;
     if (data.threadId === "ESP") {
-        let espClient = [],
-            state = { esp: { discover: [], entities: [], reconnect: [] } };
-        const
-            { Client } = require('@2colors/esphome-native-api'),
-            { Discovery } = require('@2colors/esphome-native-api'),
-            events = require('events'),
-            em = new events.EventEmitter(),
-            a = {
-                color: function (color, input, ...option) {   //  ascii color function for terminal colors
-                    if (input == undefined) input = '';
-                    let c, op = "", bold = ';1m', vbuf = "";
-                    for (let x = 0; x < option.length; x++) {
-                        if (option[x] == 0) bold = 'm';         // bold
-                        if (option[x] == 1) op = '\x1b[5m';     // blink
-                        if (option[x] == 2) op = '\u001b[4m';   // underline
+        let sys = {
+            init: function () {
+                espClient = [];
+                state = { esp: { discover: [], entities: [], reconnect: [] } };
+                sys.lib();
+            },
+            lib: function () {
+                events = require('events');
+                em = new events.EventEmitter();
+                a = {
+                    color: function (color, input, ...option) {   //  ascii color function for terminal colors
+                        if (input == undefined) input = '';
+                        let c, op = "", bold = ';1m', vbuf = "";
+                        for (let x = 0; x < option.length; x++) {
+                            if (option[x] == 0) bold = 'm';         // bold
+                            if (option[x] == 1) op = '\x1b[5m';     // blink
+                            if (option[x] == 2) op = '\u001b[4m';   // underline
+                        }
+                        switch (color) {
+                            case 'black': c = 0; break;
+                            case 'red': c = 1; break;
+                            case 'green': c = 2; break;
+                            case 'yellow': c = 3; break;
+                            case 'blue': c = 4; break;
+                            case 'purple': c = 5; break;
+                            case 'cyan': c = 6; break;
+                            case 'white': c = 7; break;
+                        }
+                        if (input === true) return '\x1b[3' + c + bold;     // begin color without end
+                        if (input === false) return '\x1b[37;m';            // end color
+                        vbuf = op + '\x1b[3' + c + bold + input + '\x1b[37;m';
+                        return vbuf;
                     }
-                    switch (color) {
-                        case 'black': c = 0; break;
-                        case 'red': c = 1; break;
-                        case 'green': c = 2; break;
-                        case 'yellow': c = 3; break;
-                        case 'blue': c = 4; break;
-                        case 'purple': c = 5; break;
-                        case 'cyan': c = 6; break;
-                        case 'white': c = 7; break;
-                    }
-                    if (input === true) return '\x1b[3' + c + bold;     // begin color without end
-                    if (input === false) return '\x1b[37;m';            // end color
-                    vbuf = op + '\x1b[3' + c + bold + input + '\x1b[37;m';
-                    return vbuf;
-                }
-            };
+                };
+            }
+        }
+        const { Client } = require('@2colors/esphome-native-api');
+        const { Discovery } = require('@2colors/esphome-native-api');
+        sys.init();
         function esp() {  // currently testing for outgoing signaling 
             espInit();                                                              // start the init sequence
             function espInit() {                                                    // create a new client for every ESP device in the local object
@@ -881,7 +889,7 @@ if (!isMainThread) {
                 }
                 espClient[x].connect();
                 espClient[x].on('newEntity', entity => {
-                    if (state.esp.reconnect[x] == true) log("ESP module: " + a.color("white", cfg.esp.devices[x].ip + " is reconnected"), 2, 2)
+                    if (state.esp.reconnect[x] == true) log("ESP module is reconnected: " + a.color("white", cfg.esp.devices[x].ip), 2, 2)
                     state.esp.reconnect[x] = false;
                     let exist = 0, io = null;
                     for (let e = 0; e < state.esp.entities[x].length; e++) {        // scan for this entity in the entity list
@@ -910,7 +918,7 @@ if (!isMainThread) {
                 espClient[x].on('error', (error) => {
                     //  console.log(error);
                     if (state.esp.reconnect[x] == false) {
-                        log("ESP module went offline, resetting ESP system", 2, 2);
+                        log("ESP module went offline, resetting ESP system: " + a.color("white", cfg.esp.devices[x].ip), 2, 2);
                         state.esp.reconnect[x] = true;
                     }
                     reset();                                                        // if there's a connection problem, start reset sequence
