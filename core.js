@@ -222,156 +222,6 @@ if (isMainThread) {
             }
         },
         sys = {
-            boot: function (step) {
-                switch (step) {
-                    case 0:     // read config.json file
-                        fs = require('fs')
-                        workingDir = require('path').dirname(require.main.filename);
-                        console.log("Loading config data...");
-                        fs.readFile(workingDir + "/config.json", function (err, data) {
-                            if (err) {
-                                console.log("\x1b[31;1mCannot find config file, exiting\x1b[37;m"
-                                    + "\nconfig.json file should be in same folder as core.js file");
-                                process.exit();
-                            }
-                            else { cfg = JSON.parse(data); sys.boot(1); }
-                        });
-                        break;
-                    case 1:     // read nv.json file
-                        console.log("Initializing workers");
-                        if (cfg.esp && cfg.esp.enable == true) {               // load worker threads
-                            console.log("ESP thread initiating...");
-                            sys.worker.esp = new Worker(__filename, { workerData: { threadId: "ESP" } });
-                            sys.worker.esp.on('message', (data) => sys.ipc(data));
-                            sys.worker.esp.postMessage({ type: "config", obj: cfg });
-                        }
-                        sys.boot(2);
-                        return;
-                        console.log("Loading non-volatile data...");
-                        fs.readFile(workingDir + "/nv.json", function (err, data) {
-                            if (err) {
-                                console.log("\x1b[33;1mNon-Volatile Storage does not exist\x1b[37;m"
-                                    + "\nnv.json file should be in same folder as core.js file");
-                                nv = { telegram: [] };
-                                sys.boot(2);
-                            }
-                            else { nv = JSON.parse(data); }
-                        });
-                        break;
-                    case 2:     // state init and load modules
-                        sys.lib();
-                        sys.init();
-                        log("initializing system states done");
-                        log("checking args");
-                        sys.checkArgs();
-                        log("specified Working Directory: " + cfg.workingDir);
-                        log("actual working directory: " + workingDir);
-                        udp.on('listening', () => { log("starting UDP Server - Interface: 127.0.0.1 Port: 65432"); });
-                        udp.on('error', (err) => { console.error(`udp server error:\n${err.stack}`); udp.close(); });
-                        udp.on('message', (msg, info) => { sys.udp(msg, info); });
-                        udp.bind(65432, "127.0.0.1");
-                        if (cfg.webDiag) {
-                            express.get("/el", function (request, response) { response.send(logs.esp); });
-                            express.get("/log", function (request, response) { response.send(logs.sys); });
-                            express.get("/tg", function (request, response) { response.send(logs.tg); });
-                            express.get("/ws", function (request, response) { response.send(logs.ws); });
-                            express.get("/nv", function (request, response) { response.send(nv); });
-                            express.get("/state", function (request, response) { response.send(state); });
-                            express.get("/cfg", function (request, response) { response.send(cfg); });
-                            express.get("/perf", function (request, response) { response.send(state.perf); });
-                            express.get("/esp", function (request, response) { response.send(state.esp); });
-                            express.get("/udp", function (request, response) { response.send(state.udp); });
-                            express.get("/ha", function (request, response) {
-                                for (let x = 0; x < cfg.homeAssistant.length; x++) {
-                                    logs.haInputs[x] = [];
-                                    hass[x].states.list()
-                                        .then(data => {
-                                            data.forEach(element => { logs.haInputs[x].push(element.entity_id) });
-                                            if (cfg.homeAssistant.length - 1 == x) response.send(logs.haInputs);
-                                        })
-                                        .catch(err => { log("fetching failed", 0, 2); });
-                                }
-
-                            });
-                            express.get("/diag", function (request, response) {
-                                for (let x = 0; x < state.udp.length; x++) {
-                                    udp.send(JSON.stringify({ type: "diag" }), state.udp[x].port);
-                                }
-                                setTimeout(() => { response.send(diag); }, 100);
-                            })
-                            serverWeb = express.listen(cfg.webDiagPort, function () { log("diag web server starting on port " + cfg.webDiagPort, 0); });
-                        }
-                        if (cfg.telegram && cfg.telegram.enable == true) {
-                            TelegramBot = require('node-telegram-bot-api');
-                            if (cfg.telegram.token != undefined && cfg.telegram.token.length < 40) {
-                                log(a.color("red", "Telegram API Token is invalid", 3));
-                            } else {
-                                log("starting Telegram service...");
-                                bot = new TelegramBot(cfg.telegram.token, { polling: true });
-                                //   bot.on("polling_error", (msg) => console.log(msg));
-                                bot.on('message', (msg) => {
-                                    if (logs.tg[logs.tgStep] == undefined) logs.tg.push(msg);
-                                    else logs.tg[logs.tgStep] = msg;
-                                    if (logs.tgStep < 100) logs.tgStep++; else logs.tgStep = 0;
-                                    // user.telegram.agent(msg);]
-                                    udp.send(JSON.stringify({ type: "telegram", obj: { class: "agent", data: msg } }), state.telegram.port);
-                                });
-                                bot.on('callback_query', (msg) => {
-                                    udp.send(JSON.stringify({ type: "telegram", obj: { class: "callback", data: msg } }), state.telegram.port);
-                                    // user.telegram.response(msg)
-                                });
-                                state.telegram.started = true;
-                            }
-                        }
-                        sys.boot(3);
-                        break;
-                    case 3:     // connect to Home Assistant
-                        if (cfg.homeAssistant) {
-                            for (let x = 0; x < cfg.homeAssistant.length; x++) {
-                                if (cfg.homeAssistant[x].enable == true) {
-                                    haconnect();
-                                    log("Legacy API - connecting to " + a.color("white", cfg.homeAssistant[x].address), 1);
-                                    function haconnect() {
-                                        hass[x].status()
-                                            .then(data => {
-                                                log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") service: " + a.color("green", data.message), 1);
-                                                log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") fetching available inputs", 1);
-                                                hass[x].states.list()
-                                                    .then(data => {
-                                                        if (data.includes("401: Unauthorized"))
-                                                            log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") Connection failed:" + data, 1, 3)
-                                                        else {
-                                                            data.forEach(element => { logs.haInputs[x].push(element.entity_id) });
-                                                            if (x == cfg.homeAssistant.length - 1) sys.boot(4);
-                                                        }
-                                                    })
-                                                    .catch(err => {
-                                                        log(err, 1, 2);
-                                                        log("Legacy API - connection to (" + a.color("white", cfg.homeAssistant[x].address) + ") failed, retrying in 10 seconds", 3);
-                                                        setTimeout(() => {
-                                                            haconnect();
-                                                        }, 10e3);
-                                                    });
-                                            })
-                                            .catch(err => {
-                                                setTimeout(() => {
-                                                    log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") service: Connection failed, retrying....", 1, 2)
-                                                    haconnect();
-                                                }, 10e3);
-                                                log(err, 1, 2);
-                                            });
-                                    }
-                                } else if (x == cfg.homeAssistant.length - 1) sys.boot(4);
-                            }
-                        } else sys.boot(4);
-                        break;
-                    case 4:     // start system timer - starts when initial HA Fetch completes
-                        log("stating websocket service...");
-                        if (cfg.homeAssistant) ha.ws();
-                        setInterval(() => sys.time.timer(), 1000);
-                        break;
-                }
-            },
             udp: function (data, info) {
                 let buf, port = info.port, registered = false, id = undefined,
                     haNum = undefined, time = Date.now();
@@ -612,6 +462,206 @@ if (isMainThread) {
                         break;
                 }
             },
+            boot: function (step) {
+                switch (step) {
+                    case 0:     // read config.json file
+                        fs = require('fs')
+                        workingDir = require('path').dirname(require.main.filename);
+                        console.log("Loading config data...");
+                        fs.readFile(workingDir + "/config.json", function (err, data) {
+                            if (err) {
+                                console.log("\x1b[31;1mCannot find config file, exiting\x1b[37;m"
+                                    + "\nconfig.json file should be in same folder as core.js file");
+                                process.exit();
+                            }
+                            else { cfg = JSON.parse(data); sys.boot(1); }
+                        });
+                        break;
+                    case 1:     // read nv.json file
+                        console.log("Initializing workers");
+                        if (cfg.esp && cfg.esp.enable == true) {               // load worker threads
+                            console.log("ESP thread initiating...");
+                            sys.worker.esp = new Worker(__filename, { workerData: { threadId: "ESP" } });
+                            sys.worker.esp.on('message', (data) => sys.ipc(data));
+                            sys.worker.esp.postMessage({ type: "config", obj: cfg });
+                        }
+                        sys.boot(2);
+                        return;
+                        console.log("Loading non-volatile data...");
+                        fs.readFile(workingDir + "/nv.json", function (err, data) {
+                            if (err) {
+                                console.log("\x1b[33;1mNon-Volatile Storage does not exist\x1b[37;m"
+                                    + "\nnv.json file should be in same folder as core.js file");
+                                nv = { telegram: [] };
+                                sys.boot(2);
+                            }
+                            else { nv = JSON.parse(data); }
+                        });
+                        break;
+                    case 2:     // state init and load modules
+                        sys.lib();
+                        sys.init();
+                        log("initializing system states done");
+                        log("checking args");
+                        sys.checkArgs();
+                        log("specified Working Directory: " + cfg.workingDir);
+                        log("actual working directory: " + workingDir);
+                        udp.on('listening', () => { log("starting UDP Server - Interface: 127.0.0.1 Port: 65432"); });
+                        udp.on('error', (err) => { console.error(`udp server error:\n${err.stack}`); udp.close(); });
+                        udp.on('message', (msg, info) => { sys.udp(msg, info); });
+                        udp.bind(65432, "127.0.0.1");
+                        if (cfg.webDiag) {
+                            express.get("/el", function (request, response) { response.send(logs.esp); });
+                            express.get("/log", function (request, response) { response.send(logs.sys); });
+                            express.get("/tg", function (request, response) { response.send(logs.tg); });
+                            express.get("/ws", function (request, response) { response.send(logs.ws); });
+                            express.get("/nv", function (request, response) { response.send(nv); });
+                            express.get("/state", function (request, response) { response.send(state); });
+                            express.get("/cfg", function (request, response) { response.send(cfg); });
+                            express.get("/perf", function (request, response) { response.send(state.perf); });
+                            express.get("/esp", function (request, response) { response.send(state.esp); });
+                            express.get("/udp", function (request, response) { response.send(state.udp); });
+                            express.get("/ha", function (request, response) {
+                                for (let x = 0; x < cfg.homeAssistant.length; x++) {
+                                    logs.haInputs[x] = [];
+                                    hass[x].states.list()
+                                        .then(data => {
+                                            data.forEach(element => { logs.haInputs[x].push(element.entity_id) });
+                                            if (cfg.homeAssistant.length - 1 == x) response.send(logs.haInputs);
+                                        })
+                                        .catch(err => { log("fetching failed", 0, 2); });
+                                }
+
+                            });
+                            express.get("/diag", function (request, response) {
+                                for (let x = 0; x < state.udp.length; x++) {
+                                    udp.send(JSON.stringify({ type: "diag" }), state.udp[x].port);
+                                }
+                                setTimeout(() => { response.send(diag); }, 100);
+                            })
+                            serverWeb = express.listen(cfg.webDiagPort, function () { log("diag web server starting on port " + cfg.webDiagPort, 0); });
+                        }
+                        if (cfg.telegram && cfg.telegram.enable == true) {
+                            TelegramBot = require('node-telegram-bot-api');
+                            if (cfg.telegram.token != undefined && cfg.telegram.token.length < 40) {
+                                log(a.color("red", "Telegram API Token is invalid", 3));
+                            } else {
+                                log("starting Telegram service...");
+                                bot = new TelegramBot(cfg.telegram.token, { polling: true });
+                                //   bot.on("polling_error", (msg) => console.log(msg));
+                                bot.on('message', (msg) => {
+                                    if (logs.tg[logs.tgStep] == undefined) logs.tg.push(msg);
+                                    else logs.tg[logs.tgStep] = msg;
+                                    if (logs.tgStep < 100) logs.tgStep++; else logs.tgStep = 0;
+                                    // user.telegram.agent(msg);]
+                                    udp.send(JSON.stringify({ type: "telegram", obj: { class: "agent", data: msg } }), state.telegram.port);
+                                });
+                                bot.on('callback_query', (msg) => {
+                                    udp.send(JSON.stringify({ type: "telegram", obj: { class: "callback", data: msg } }), state.telegram.port);
+                                    // user.telegram.response(msg)
+                                });
+                                state.telegram.started = true;
+                            }
+                        }
+                        sys.boot(3);
+                        break;
+                    case 3:     // connect to Home Assistant
+                        if (cfg.homeAssistant) {
+                            for (let x = 0; x < cfg.homeAssistant.length; x++) {
+                                if (cfg.homeAssistant[x].enable == true) {
+                                    haconnect();
+                                    log("Legacy API - connecting to " + a.color("white", cfg.homeAssistant[x].address), 1);
+                                    function haconnect() {
+                                        hass[x].status()
+                                            .then(data => {
+                                                log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") service: " + a.color("green", data.message), 1);
+                                                log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") fetching available inputs", 1);
+                                                hass[x].states.list()
+                                                    .then(data => {
+                                                        if (data.includes("401: Unauthorized"))
+                                                            log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") Connection failed:" + data, 1, 3)
+                                                        else {
+                                                            data.forEach(element => { logs.haInputs[x].push(element.entity_id) });
+                                                            if (x == cfg.homeAssistant.length - 1) sys.boot(4);
+                                                        }
+                                                    })
+                                                    .catch(err => {
+                                                        log(err, 1, 2);
+                                                        log("Legacy API - connection to (" + a.color("white", cfg.homeAssistant[x].address) + ") failed, retrying in 10 seconds", 3);
+                                                        setTimeout(() => {
+                                                            haconnect();
+                                                        }, 10e3);
+                                                    });
+                                            })
+                                            .catch(err => {
+                                                setTimeout(() => {
+                                                    log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") service: Connection failed, retrying....", 1, 2)
+                                                    haconnect();
+                                                }, 10e3);
+                                                log(err, 1, 2);
+                                            });
+                                    }
+                                } else if (x == cfg.homeAssistant.length - 1) sys.boot(4);
+                            }
+                        } else sys.boot(4);
+                        break;
+                    case 4:     // start system timer - starts when initial HA Fetch completes
+                        log("stating websocket service...");
+                        if (cfg.homeAssistant) ha.ws();
+                        setInterval(() => sys.time.timer(), 1000);
+                        break;
+                }
+            },
+            init: function () { // initialize system volatile memory
+                state = { udp: [], ha: [], perf: { ha: [] } };
+                diag = [];      // array for each UDP client diag
+                ws = [];
+                hass = [];
+                time = { date: undefined, month: 0, day: 0, dow: 0, dayLast: undefined, hour: 0, hourLast: undefined, min: 0, minLast: undefined, sec: 0, up: 0, ms: 0, millis: 0, stamp: "" };
+                logs = { step: 0, sys: [], ws: [], tg: [], tgStep: 0, haInputs: [], esp: [] };
+                sys.time.sync();
+                time.minLast = time.min;
+                time.hourLast = time.hour;
+                time.dayLast = time.day;
+                if (cfg.homeAssistant) {
+                    for (let x = 0; x < cfg.homeAssistant.length; x++) {
+                        logs.ws.push([]);
+                        logs.haInputs.push([]);
+                        state.ha.push({ ws: {} });
+                        ws.push(new WebSocketClient());
+                        hass.push(new HomeAssistant({
+                            host: "http://" + cfg.homeAssistant[x].address,
+                            port: cfg.homeAssistant[x].port,
+                            token: cfg.homeAssistant[x].token,
+                            ignoreCert: true
+                        }));
+                        state.ha[x].ws =
+                        {
+                            timeout: null, // used for esp reset 
+                            logStep: 0,
+                            error: false,
+                            id: 1,
+                            reply: true,
+                            pingsLost: 0,
+                            timeStart: 0,
+                        };
+                        state.perf.ha.push(
+                            {
+                                best: 1000,
+                                worst: 0,
+                                average: 0,
+                                id: 0,
+                                start: 0,
+                                wait: false,
+                                last100Pos: 0,
+                                last100: [],
+                            }
+                        );
+                    };
+                }
+                state.esp = { discover: [], entities: [] };
+                state.telegram = { started: false, users: [] };
+            },
             lib: function () {
                 a = {
                     color: function (color, input, ...option) {   //  ascii color function for terminal colors
@@ -714,56 +764,6 @@ if (isMainThread) {
                     else if (level != 0) console.log(cbuf);
                     return buf;
                 };
-            },
-            init: function () { // initialize system volatile memory
-                state = { udp: [], ha: [], perf: { ha: [] } };
-                diag = [];      // array for each UDP client diag
-                ws = [];
-                hass = [];
-                time = { date: undefined, month: 0, day: 0, dow: 0, dayLast: undefined, hour: 0, hourLast: undefined, min: 0, minLast: undefined, sec: 0, up: 0, ms: 0, millis: 0, stamp: "" };
-                logs = { step: 0, sys: [], ws: [], tg: [], tgStep: 0, haInputs: [], esp: [] };
-                sys.time.sync();
-                time.minLast = time.min;
-                time.hourLast = time.hour;
-                time.dayLast = time.day;
-                if (cfg.homeAssistant) {
-                    for (let x = 0; x < cfg.homeAssistant.length; x++) {
-                        logs.ws.push([]);
-                        logs.haInputs.push([]);
-                        state.ha.push({ ws: {} });
-                        ws.push(new WebSocketClient());
-                        hass.push(new HomeAssistant({
-                            host: "http://" + cfg.homeAssistant[x].address,
-                            port: cfg.homeAssistant[x].port,
-                            token: cfg.homeAssistant[x].token,
-                            ignoreCert: true
-                        }));
-                        state.ha[x].ws =
-                        {
-                            timeout: null, // used for esp reset 
-                            logStep: 0,
-                            error: false,
-                            id: 1,
-                            reply: true,
-                            pingsLost: 0,
-                            timeStart: 0,
-                        };
-                        state.perf.ha.push(
-                            {
-                                best: 1000,
-                                worst: 0,
-                                average: 0,
-                                id: 0,
-                                start: 0,
-                                wait: false,
-                                last100Pos: 0,
-                                last100: [],
-                            }
-                        );
-                    };
-                }
-                state.esp = { discover: [], entities: [] };
-                state.telegram = { started: false, users: [] };
             },
             checkArgs: function () {
                 if (process.argv[2] == "-i") {
