@@ -1,10 +1,9 @@
-// this an example of telegram remote control, this going inside the tw-client.js file
     user = {        // user configurable block - Telegram 
         telegram: { // enter a case matching your desireable input
             agent: function (msg) {
                 //  log("incoming telegram message: " + msg, 0, 0);
                 //  console.log("incoming telegram message: ", msg);
-                if (sys.telegram.auth(msg)) {
+                if (telegram.auth(msg)) {
                     switch (msg.text) {
                         case "?": console.log("test help menu"); break;
                         case "/start": bot(msg.chat.id, "you are already registered"); break;
@@ -12,9 +11,9 @@
                         case "r":
                             bot(msg.from.id, "Test Menu:");
                             setTimeout(() => {      // delay to ensure menu Title gets presented first in Bot channel
-                                sys.telegram.buttonToggle(msg, "t1", "Test Button");
+                                telegram.buttonToggle(msg, "t1", "Test Button");
                                 setTimeout(() => {      // delay to ensure menu Title gets presented first in Bot channel
-                                    sys.telegram.buttonMulti(msg, "t2", "Test Choices", ["test1", "test2", "test3"]);
+                                    telegram.buttonMulti(msg, "t2", "Test Choices", ["test1", "test2", "test3"]);
                                 }, 200);
                             }, 200);
                             break;
@@ -23,7 +22,7 @@
                             break;
                     }
                 }
-                else if (msg.text == cfg.telegram.password) sys.telegram.sub(msg);
+                else if (msg.text == cfg.telegram.password) telegram.sub(msg);
                 else if (msg.text == "/start") bot(msg.chat.id, "give me the passcode");
                 else bot(msg.chat.id, "i don't know you, go away");
 
