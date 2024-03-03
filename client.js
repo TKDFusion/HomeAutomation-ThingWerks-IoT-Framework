@@ -54,68 +54,6 @@ let
     ];
 let
     sys = {
-        boot: function (step) {
-            switch (step) {
-                case 0:
-                    sys.lib();
-                    console.log("Loading non-volatile data...");
-                    fs.readFile(workingDir + "/nv-" + cfg.moduleName + ".json", function (err, data) {
-                        if (err) {
-                            log("\x1b[33;1mNon-Volatile Storage does not exist\x1b[37;m"
-                                + ", nv-clientName.json file should be in same folder as client.js file");
-                            nv = { telegram: [] };
-                        }
-                        else { nv = JSON.parse(data); }
-                        sys.boot(1);
-                    });
-                    break;
-                case 1:
-                    sys.checkArgs();
-                    sys.com();
-                    sys.register();
-                    setTimeout(() => { sys.boot(2); }, 3e3);
-                    break;
-                case 2:
-                    state.online = true;
-                    setInterval(() => { sys.heartBeat(); }, 1e3);
-                    if (cfg.ha) { send("haFetch"); confirmHA(); }
-                    else setTimeout(() => { automation.forEach((func, index) => { func(index) }); }, 1e3);
-                    if (cfg.esp) {
-                        if (!cfg.ha) confirmESP();
-                        send("espFetch");
-                    }
-                    function confirmHA() {
-                        setTimeout(() => {
-                            if (state.onlineHA == false) {
-                                log("TW-Core isn't online yet or fetch is failing, retrying...", 2);
-                                sys.register();
-                                send("haFetch");
-                                confirmHA();
-                            }
-                        }, 10e3);
-                    }
-                    function confirmESP() {
-                        setTimeout(() => {
-                            if (state.onlineESP == false) {
-                                log("TW-Core isn't online yet or fetch is failing, retrying...", 2);
-                                send("espFetch");
-                                confirmESP();
-                            }
-                        }, 10e3);
-                    }
-                    break;
-            }
-        },
-        lib: function () {
-            fs = require('fs'),
-                events = require('events'),
-                em = new events.EventEmitter(),
-                exec = require('child_process').exec,
-                execSync = require('child_process').execSync,
-                workingDir = require('path').dirname(require.main.filename),
-                udpClient = require('dgram'),
-                udp = udpClient.createSocket('udp4');
-        },
         com: function () {
             udp.on('message', function (data, info) {
                 let buf = JSON.parse(data);
@@ -197,10 +135,35 @@ let
                 }
             }
         },
-        heartBeat: function () { send("heartBeat") },
-        checkArgs: function () {
+        init: function () {
+            nv = {};
+            state = { auto: [], ha: [], esp: [], onlineHA: false, onlineESP: false, online: false };
+            time = {
+                sec: null, min: null,
+                sync: function () {
+                    this.sec = Math.floor(Date.now() / 1000);
+                    this.min = Math.floor(Date.now() / 1000 / 60);
+                }
+            };
+            esp = { send: function (name, state) { send("espState", { name: name, state: state }) } };
+            ha = {
+                getEntities: function () { send("haQuery") },
+                send: function (name, state, unit, id) {  // if ID is not expressed for sensor, then sensor data will be send to HA system 0
+                    if (isFinite(Number(name)) == true) send("haState", { name: cfg.ha[name], state: state, unit: unit, haID: id });
+                    else send("haState", { name: name, state: state, unit: unit, haID: id });
+                }
+            };
+            fs = require('fs');
+            events = require('events');
+            em = new events.EventEmitter();
+            exec = require('child_process').exec;
+            execSync = require('child_process').execSync;
+            workingDir = require('path').dirname(require.main.filename);
+            path = require('path');
+            scriptName = path.basename(__filename).slice(0, -3);
+            udpClient = require('dgram');
+            udp = udpClient.createSocket('udp4');
             if (process.argv[2] == "-i") {
-                moduleName = path.basename(__filename).slice(0, -3);
                 log("installing TW-Client-" + moduleName + " service...");
                 let service = [
                     "[Unit]",
@@ -226,77 +189,111 @@ let
                 console.log("type: journalctl -fu tw-client-" + moduleName);
                 process.exit();
             }
-        },
-        file: {
-            write: {
-                nv: function () {  // write non-volatile memory to the disk
-                    // log("writing NV data...")
-                    fs.writeFile(workingDir + "/nv-" + cfg.moduleName + "-bak.json", JSON.stringify(nv), function () {
-                        fs.copyFile(workingDir + "/nv-" + cfg.moduleName + "-bak.json", workingDir + "/nv-" + cfg.moduleName + ".json", (err) => {
-                            if (err) throw err;
+            file = {
+                write: {
+                    nv: function () {  // write non-volatile memory to the disk
+                        // log("writing NV data...")
+                        fs.writeFile(workingDir + "/nv-" + scriptName + "-bak.json", JSON.stringify(nv), function () {
+                            fs.copyFile(workingDir + "/nv-" + scriptName + "-bak.json", workingDir + "/nv-" + scriptName + ".json", (err) => {
+                                if (err) throw err;
+                            });
                         });
-                    });
-                }
-            },
-        },
-        telegram: {
-            sub: function (msg) {
-                let buf = { user: msg.from.first_name + " " + msg.from.last_name, id: msg.from.id }
-                if (!sys.telegram.auth(msg)) {
-                    log("telegram - user just joined the group - " + msg.from.first_name + " " + msg.from.last_name + " ID: " + msg.from.id, 0, 2);
-                    nv.telegram.push(buf);
-                    bot(msg.chat.id, 'registered');
-                    send("telegram", { class: "sub", id: msg.from.id });
-                    sys.file.write.nv();
-                } else bot(msg.chat.id, 'already registered');
-            },
-            auth: function (msg) {
-                let exist = false;
-                for (let x = 0; x < nv.telegram.length; x++)
-                    if (nv.telegram[x].id == msg.from.id) { exist = true; break; };
-                if (exist) return true; else return false;
-            },
-            buttonToggle: function (msg, auto, name) {
-                bot(msg.from.id,
-                    name, {
-                    reply_markup: {
-                        inline_keyboard: [
-                            [
-                                { text: "on", callback_data: (auto + "true") },
-                                { text: "off", callback_data: (auto + "false") }
-                            ]
-                        ]
                     }
-                }
-                );
-            },
-            buttonMulti: function (msg, auto, name, array) {
-                buf = { reply_markup: { inline_keyboard: [[]] } };
-                array.forEach(element => {
-                    buf.reply_markup.inline_keyboard[0].push({ text: element, callback_data: (auto + element) })
-                });
-                bot(msg.from.id, name, buf);
-            },
+                },
+            };
+            telegram = {
+                sub: function (msg) {
+                    let buf = { user: msg.from.first_name + " " + msg.from.last_name, id: msg.from.id }
+                    if (!telegram.auth(msg)) {
+                        log("telegram - user just joined the group - " + msg.from.first_name + " " + msg.from.last_name + " ID: " + msg.from.id, 0, 2);
+                        nv.telegram.push(buf);
+                        bot(msg.chat.id, 'registered');
+                        send("telegram", { class: "sub", id: msg.from.id });
+                        file.write.nv();
+                    } else bot(msg.chat.id, 'already registered');
+                },
+                auth: function (msg) {
+                    let exist = false;
+                    for (let x = 0; x < nv.telegram.length; x++)
+                        if (nv.telegram[x].id == msg.from.id) { exist = true; break; };
+                    if (exist) return true; else return false;
+                },
+                buttonToggle: function (msg, auto, name) {
+                    bot(msg.from.id,
+                        name, {
+                        reply_markup: {
+                            inline_keyboard: [
+                                [
+                                    { text: "on", callback_data: (auto + "true") },
+                                    { text: "off", callback_data: (auto + "false") }
+                                ]
+                            ]
+                        }
+                    }
+                    );
+                },
+                buttonMulti: function (msg, auto, name, array) {
+                    buf = { reply_markup: { inline_keyboard: [[]] } };
+                    array.forEach(element => {
+                        buf.reply_markup.inline_keyboard[0].push({ text: element, callback_data: (auto + element) })
+                    });
+                    bot(msg.from.id, name, buf);
+                },
+            };
+            sys.boot(0);
         },
-    },
-    esp = { send: function (name, state) { send("espState", { name: name, state: state }) } },
-    ha = {
-        getEntities: function () { send("haQuery") },
-        send: function (name, state, unit, id) {  // if ID is not expressed for sensor, then sensor data will be send to HA system 0
-            if (isFinite(Number(name)) == true) send("haState", { name: cfg.ha[name], state: state, unit: unit, haID: id });
-            else send("haState", { name: name, state: state, unit: unit, haID: id });
-        }
-    },
-    state = { auto: [], ha: [], esp: [], onlineHA: false, onlineESP: false, online: false },
-    time = {
-        sec: null, min: null,
-        sync: function () {
-            this.sec = Math.floor(Date.now() / 1000);
-            this.min = Math.floor(Date.now() / 1000 / 60);
-        }
-    },
-    nv = {};
-setTimeout(() => { sys.boot(0); }, 1e3);
+        boot: function (step) {
+            switch (step) {
+                case 0:
+                    console.log("Loading non-volatile data...");
+                    fs.readFile(workingDir + "/nv-" + scriptName + ".json", function (err, data) {
+                        if (err) {
+                            log("\x1b[33;1mNon-Volatile Storage does not exist\x1b[37;m"
+                                + ", nv-clientName.json file should be in same folder as client.js file");
+                            nv = { telegram: [] };
+                        }
+                        else { nv = JSON.parse(data); }
+                        sys.boot(1);
+                    });
+                    break;
+                case 1:
+                    sys.com();
+                    sys.register();
+                    setTimeout(() => { sys.boot(2); }, 3e3);
+                    break;
+                case 2:
+                    state.online = true;
+                    setInterval(() => { send("heartBeat") }, 1e3);
+                    if (cfg.ha) { send("haFetch"); confirmHA(); }
+                    else setTimeout(() => { automation.forEach((func, index) => { func(index) }); }, 1e3);
+                    if (cfg.esp) {
+                        if (!cfg.ha) confirmESP();
+                        send("espFetch");
+                    }
+                    function confirmHA() {
+                        setTimeout(() => {
+                            if (state.onlineHA == false) {
+                                log("TW-Core isn't online yet or fetch is failing, retrying...", 2);
+                                sys.register();
+                                send("haFetch");
+                                confirmHA();
+                            }
+                        }, 10e3);
+                    }
+                    function confirmESP() {
+                        setTimeout(() => {
+                            if (state.onlineESP == false) {
+                                log("TW-Core isn't online yet or fetch is failing, retrying...", 2);
+                                send("espFetch");
+                                confirmESP();
+                            }
+                        }, 10e3);
+                    }
+                    break;
+            }
+        },
+    };
+setTimeout(() => { sys.init(); }, 1e3);
 function bot(id, data, obj) { send("telegram", { class: "send", id: id, data: data, obj: obj }) }
 function send(type, obj, name) { udp.send(JSON.stringify({ type: type, obj: obj, name: name }), 65432, '127.0.0.1') }
 function log(message, index, level) {
