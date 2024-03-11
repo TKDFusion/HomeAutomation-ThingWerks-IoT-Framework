@@ -430,7 +430,10 @@ if (isMainThread) {
                     case "esp":
                         switch (data.class) {
                             case "init":
-                                log("initializing esp main thread state");
+                                if(state.esp.boot){
+                                    log("initializing esp main thread state");
+                                    state.esp.boot = true;
+                                }
                                 state.esp = data.obj;
                                 break;
                             case "entity":
@@ -659,7 +662,7 @@ if (isMainThread) {
                         );
                     };
                 }
-                state.esp = { discover: [], entities: [] };
+                state.esp = { discover: [], entities: [], boot: false };
                 state.telegram = { started: false, users: [] };
             },
             lib: function () {
@@ -774,12 +777,13 @@ if (isMainThread) {
                         "[Install]",
                         "WantedBy=multi-user.target\n",
                         "[Service]",
-                        "ExecStart=nodemon " + cfg.workingDir + "core.js -w " + cfg.workingDir + "core.js",
+                        "ExecStart=nodemon " + cfg.workingDir + "core.js -w " + cfg.workingDir + "core.js --exitcrash",
                         "Type=simple",
                         "User=root",
                         "Group=root",
                         "WorkingDirectory=" + cfg.workingDir,
-                        "Restart=on-failure\n",
+                        "Restart=on-failure",
+                        "RestartSec=0\n",
                     ];
                     fs.writeFileSync("/etc/systemd/system/tw-core.service", service.join("\n"));
                     // execSync("mkdir /apps/ha -p");
