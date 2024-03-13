@@ -430,7 +430,7 @@ if (isMainThread) {
                     case "esp":
                         switch (data.class) {
                             case "init":
-                                if(state.esp.boot){
+                                if (state.esp.boot) {
                                     log("initializing esp main thread state");
                                     state.esp.boot = true;
                                 }
@@ -442,7 +442,7 @@ if (isMainThread) {
                                 break;
                             case "state":
                                 //    console.log(state.esp.entities);
-                                state.esp.entities[data.obj.id][data.obj.io].state = data.obj.state;
+                                state.esp.entities[data.obj.id][data.obj.io].state = data.obj.state;   // store the state locally 
                                 // console.log(state.esp.entities);
                                 for (let a = 0; a < state.udp.length; a++) {        // scan all the UDP clients and find which one cares about this entity
                                     for (let b = 0; b < state.udp[a].esp.length; b++) {                 // scan each UDP clients registered ESP entity list
@@ -612,6 +612,7 @@ if (isMainThread) {
                         log("stating websocket service...");
                         if (cfg.homeAssistant) ha.ws();
                         setInterval(() => sys.time.timer(), 1000);
+                        setTimeout(() => log("TW Core just went online", 0, 2), 20e3);
                         break;
                 }
             },
@@ -906,7 +907,7 @@ if (!isMainThread) {
                     if (entity.type === "Switch") {                                 // if this is a switch, register the emitter
                         em.on(entity.config.objectId, function (id, state) {        // emitter for this connection 
                             //  log("setting entity: " + id + " to " + state, 0, 0)
-                            entity.connection.switchCommandService({ key: id, state: state });
+                            try { entity.connection.switchCommandService({ key: id, state: state }); } catch (e) { log(e, 2, 3); reset(); }
                         });
                     }
                     entity.on('state', (data) => {
