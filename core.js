@@ -545,7 +545,7 @@ if (isMainThread) {
                             serverWeb = express.listen(cfg.webDiagPort, function () { log("diag web server starting on port " + cfg.webDiagPort, 0); });
                         }
                         if (cfg.telegram && cfg.telegram.enable == true) {
-                            TelegramBot = require('node-telegram-bot-api');
+                            TelegramBot = require('node-telegram-bot-api');   // lib is here so it wont even be loaded unless enabled 
                             if (cfg.telegram.token != undefined && cfg.telegram.token.length < 40) {
                                 log(a.color("red", "Telegram API Token is invalid", 3));
                             } else {
@@ -562,6 +562,14 @@ if (isMainThread) {
                                 bot.on('callback_query', (msg) => {
                                     udp.send(JSON.stringify({ type: "telegram", obj: { class: "callback", data: msg } }), state.telegram.port);
                                     // user.telegram.response(msg)
+                                });
+                                bot.on('polling_error', (error) => {
+                                    // console.log(error.code);  // => 'EFATAL'
+                                    log("telegram sending polling error")
+                                });
+                                bot.on('webhook_error', (error) => {
+                                    // console.log(error.code);  // => 'EPARSE'
+                                    log("telegram webhook error")
                                 });
                                 state.telegram.started = true;
                             }
@@ -897,13 +905,13 @@ if (!isMainThread) {
             client.connect();
             client.on('newEntity', data => {
                 if (state.reconnect == true) log("ESP module is reconnected: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 2)
-                state.reconnect = false;
                 let exist = 0, io = null;
                 for (let x = 0; x < state.entity.length; x++)         // scan for this entity in the entity list
                     if (state.entity[x].id == data.id) { exist++; io = x; break; };
                 if (exist == 0)                                                 // dont add this entity if its already in the list 
                     io = state.entity.push({ name: data.config.objectId, type: data.type, id: data.id }) - 1;
-                log("new entity - connected - ID: " + data.id + " - " + a.color("green", data.config.objectId), 2);
+                if (state.reconnect == false)
+                    log("new entity - connected - ID: " + data.id + " - " + a.color("green", data.config.objectId), 2);
                 parentPort.postMessage({ type: "esp", class: "entity", esp: workerData.esp, obj: { id: data.id, io, name: data.config.objectId, type: data.type } });
                 if (data.type === "Switch") {                                 // if this is a switch, register the emitter
                     em.on(data.config.objectId, function (id, state) {        // emitter for this connection 
@@ -922,6 +930,7 @@ if (!isMainThread) {
                         }
                     }
                 });
+                state.reconnect = false;
             });
             client.on('error', (error) => {
                 // console.log(error);
