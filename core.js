@@ -423,6 +423,15 @@ if (isMainThread) {
                         log("Client: " + state.udp[x].name + " has crashed!!", 3, 3);
                         state.udp.splice(x, 1);
                         diag.splice(x, 1);
+                        log("rescanning HA inputs")
+                        for (let x = 0; x < cfg.homeAssistant.length; x++) {  // reset HA Inputs when client restart (crashes)
+                            logs.haInputs[x] = [];
+                            hass[x].states.list()
+                                .then(data => {
+                                    data.forEach(element => { logs.haInputs[x].push(element.entity_id) });
+                                })
+                                .catch(err => { log("fetching failed", 0, 2); });
+                        }
                     }
                 }
             },
@@ -534,7 +543,6 @@ if (isMainThread) {
                                         })
                                         .catch(err => { log("fetching failed", 0, 2); });
                                 }
-
                             });
                             express.get("/diag", function (request, response) {
                                 for (let x = 0; x < state.udp.length; x++) {
@@ -792,7 +800,7 @@ if (isMainThread) {
                         "Group=root",
                         "WorkingDirectory=" + cfg.workingDir,
                         "Restart=on-failure",
-                        "RestartSec=0\n",
+                        "RestartSec=5\n",
                     ];
                     fs.writeFileSync("/etc/systemd/system/tw-core.service", service.join("\n"));
                     // execSync("mkdir /apps/ha -p");
