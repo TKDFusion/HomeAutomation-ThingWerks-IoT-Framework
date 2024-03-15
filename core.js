@@ -381,7 +381,9 @@ if (isMainThread) {
                     case "telegram":
                         log("receiving telegram data: " + buf.obj, 4, 0);
                         switch (buf.obj.class) {
-                            case "send": bot.sendMessage(buf.obj.id, buf.obj.data, buf.obj.obj); break;
+                            case "send":
+                                try { bot.sendMessage(buf.obj.id, buf.obj.data, buf.obj.obj); } catch { log("telegram sending error") }
+                                break;
                             case "sub":
                                 let userExist = false;
                                 for (let x = 0; x < state.telegram.users.length; x++) {
@@ -753,9 +755,9 @@ if (isMainThread) {
                                     if (!message.includes("ESP module went offline, resetting ESP system:")
                                         || !message.includes("ESP module is reconnected: ")
                                         || !message.includes("ESP Module has gone offline: ")) {
-                                        bot.sendMessage(state.telegram.users[x], buf);
+                                        try { bot.sendMessage(state.telegram.users[x], buf); } catch { log("telegram sending error") }
                                     }
-                                } else bot.sendMessage(state.telegram.users[x], buf);
+                                } else try { bot.sendMessage(state.telegram.users[x], buf); } catch { log("telegram sending error") }
                             }
                         }
                     }
@@ -922,7 +924,7 @@ if (!isMainThread) {
                 });
             });
             client.on('error', (error) => {
-               // console.log(error);
+                // console.log(error);
                 if (state.reconnect == false) {
                     log("ESP module went offline, resetting ESP system: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 2);
                     state.reconnect = true;
