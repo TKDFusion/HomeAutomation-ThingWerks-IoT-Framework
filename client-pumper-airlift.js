@@ -245,7 +245,6 @@ if (isMainThread) {
                                         break;
                                     }
                                 }
-
                             }
                         }
                         // log("incoming esp state: " + buf.obj.name + " data: " + buf.obj.state, 3, 0);
@@ -893,7 +892,6 @@ if (!isMainThread) {
         const { Client } = require('@2colors/esphome-native-api');
         const { Discovery } = require('@2colors/esphome-native-api');
         sys.init();
-
         function espInit() {
             client = new Client({
                 host: cfg.esp.devices[workerData.esp].ip,
@@ -932,6 +930,12 @@ if (!isMainThread) {
                 }
                 data.on('state', (update) => {
                     //   console.log("state change: ", update.key," state: ",  update.state );
+                    if (state.reconnect == true || state.boot == false) {
+                        if (data.config.objectId.includes("wifi"))
+                            log("new entity - connected - ID: " + data.id + " - "
+                                + a.color("green", data.config.objectId) + " - Signal: " + update.state, 2);
+                        setTimeout(() => { state.boot = true; }, 10e3);  // indicate booted so not to show entity names again
+                    }
                     for (let x = 0; x < state.entity.length; x++) {
                         //   console.log(state.entity[x])
                         if (state.entity[x].id == update.key) {          // identify this entity request with local object
@@ -948,7 +952,6 @@ if (!isMainThread) {
                     log("ESP module went offline, resetting ESP system: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 0);
                     state.reconnect = true;
                 }
-                state.boot = true;  // indicate booted so not to show entity names again
                 reset();                                                        // if there's a connection problem, start reset sequence
             });
         }
