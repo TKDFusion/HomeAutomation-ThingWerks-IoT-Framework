@@ -908,8 +908,10 @@ if (!isMainThread) {
             clientConnect();
         }
         function clientConnect() {
-            if (state.reconnect == false)
+            if (state.reconnect == false) {
                 log("connecting to esp module: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2);       // client connection function, ran for each ESP device
+                setTimeout(() => { state.reconnect = false; }, 10e3);
+            }
             client.connect();
             client.on('newEntity', data => {
                 if (state.reconnect == true) log("ESP module is reconnected: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 2)
@@ -938,7 +940,6 @@ if (!isMainThread) {
                         }
                     }
                 });
-                state.reconnect = false;
             });
             client.on('error', (error) => {
                 // console.log(error);
