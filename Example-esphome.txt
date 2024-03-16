@@ -1,62 +1,80 @@
 esphome:
-  name: esp-test
-  friendly_name: ESP-Test
-
+  name: esp-uth
+  friendly_name: ESP-UTH
 esp32:
   board: esp32dev
   framework:
     type: arduino
-
-# Enable logging
 logger:
-
-# Enable Home Assistant API
 api:
   encryption:
-    key: "mykey"
-
+    key: "key"
 ota:
-  password: "ota pass"
-
+  password: "pass"
 wifi:
   networks:
-  - ssid: myWifi
+  - ssid: WiFi-UTH
+  ap:
+    ssid: "Esp-Uth Fallback Hotspot"
+    password: "key"
   manual_ip:
-    static_ip: 10.10.1.245
-    gateway: 10.10.0.1
-    subnet: 255.255.224.0 
-  output_power: 20dB
-  power_save_mode: none
-uart:
-  rx_pin: GPIO04
-  tx_pin: GPIO16
-  baud_rate: 9600
-modbus:
+    static_ip: 10.20.0.97
+    gateway: 10.20.0.1
+    subnet: 255.255.252.0 
+    dns1: 10.20.0.1
 sensor:
-  - platform: pulse_counter
-    name: "Flow-Test"
-    pin: GPIO14
-    update_interval: 2s
-    filters:
-    - lambda: return x / 60.0;
-    unit_of_measurement: "L/m" 
-    total:
-      name: "Flow-Total-Test"
-      unit_of_measurement: "m3"
-      accuracy_decimals: 3
-      filters:
-        - lambda: return x / 60 / 1000;
   - platform: adc
-    name: "PSI-Test"
+    name: "uth-tank"
     pin: GPIO35
-    id: pressure
-    update_interval: 1s
-    unit_of_measurement: "v"
-    accuracy_decimals: 1
     attenuation: 11db
+    filters:
+      - median:
+            window_size: 60
+            send_every: 2
+    accuracy_decimals: 3
+    update_interval: 1s
+  - platform: wifi_signal
+    name: "uth-wifi"
+    update_interval: 60s
 switch:
   - platform: gpio
-    name: "led"
+    name: "UTH-Relay1"
     pin:
-      number: 2
+      number: 4
       inverted: false
+  - platform: gpio
+    name: "UTH-Relay2"
+    pin:
+      number: 16
+      inverted: false
+  - platform: gpio
+    name: "UTH-Relay3"
+    pin:
+      number: 17
+      inverted: false
+  - platform: gpio
+    name: "UTH-Relay4"
+    pin:
+      number: 18
+      inverted: false
+  - platform: gpio
+    name: "UTH-Relay5"
+    pin:
+      number: 19
+      inverted: false
+  - platform: gpio
+    name: "UTH-Relay6"
+    pin:
+      number: 21
+      inverted: false
+  - platform: gpio
+    name: "UTH-Relay7"
+    pin:
+      number: 22
+      inverted: false
+  - platform: gpio
+    name: "UTH-Relay8"
+    pin:
+      number: 23
+      inverted: false
+
