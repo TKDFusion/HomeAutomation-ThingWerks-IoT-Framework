@@ -245,7 +245,6 @@ if (isMainThread) {
                                         break;
                                     }
                                 }
-
                             }
                         }
                         // log("incoming esp state: " + buf.obj.name + " data: " + buf.obj.state, 3, 0);
@@ -769,8 +768,8 @@ if (isMainThread) {
                             for (let x = 0; x < state.telegram.users.length; x++) {
                                 if (cfg.telegram.logESPDisconnect == false) {
                                     if (!message.includes("ESP module went offline, resetting ESP system:")
-                                        || !message.includes("ESP module is reconnected: ")
-                                        || !message.includes("ESP Module has gone offline: ")) {
+                                        && !message.includes("ESP module is reconnected: ")
+                                        && !message.includes("ESP Module has gone offline: ")) {
                                         bot.sendMessage(state.telegram.users[x], buf).catch(error => { log("telegram sending error") })
                                     }
                                 } else bot.sendMessage(state.telegram.users[x], buf).catch(error => { log("telegram sending error") })
@@ -857,7 +856,7 @@ if (!isMainThread) {
             init: function () {
                 cfg = {};
                 client = null;
-                state = { entity: [], reconnect: false };
+                state = { entity: [], reconnect: false, boot: false };
                 sys.lib();
             },
             lib: function () {
@@ -893,7 +892,6 @@ if (!isMainThread) {
         const { Client } = require('@2colors/esphome-native-api');
         const { Discovery } = require('@2colors/esphome-native-api');
         sys.init();
-
         function espInit() {
             client = new Client({
                 host: cfg.esp.devices[workerData.esp].ip,
@@ -914,13 +912,14 @@ if (!isMainThread) {
             }
             client.connect();
             client.on('newEntity', data => {
-                if (state.reconnect == true) log("ESP module is reconnected: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 2)
+                if (state.reconnect == true) log("ESP module is reconnected: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 0)
+                state.reconnect = false
                 let exist = 0, io = null;
                 for (let x = 0; x < state.entity.length; x++)         // scan for this entity in the entity list
                     if (state.entity[x].id == data.id) { exist++; io = x; break; };
                 if (exist == 0)                                                 // dont add this entity if its already in the list 
                     io = state.entity.push({ name: data.config.objectId, type: data.type, id: data.id }) - 1;
-                if (state.reconnect == false)
+                if (state.boot == false)
                     log("new entity - connected - ID: " + data.id + " - " + a.color("green", data.config.objectId), 2);
                 parentPort.postMessage({ type: "esp", class: "entity", esp: workerData.esp, obj: { id: data.id, io, name: data.config.objectId, type: data.type } });
                 if (data.type === "Switch") {                                 // if this is a switch, register the emitter
@@ -931,6 +930,12 @@ if (!isMainThread) {
                 }
                 data.on('state', (update) => {
                     //   console.log("state change: ", update.key," state: ",  update.state );
+                    if (state.reconnect == true || state.boot == false) {
+                        if (data.config.objectId.includes("wifi"))
+                            log("new entity - connected - ID: " + data.id + " - "
+                                + a.color("green", data.config.objectId) + " - Signal: " + update.state, 2);
+                        setTimeout(() => { state.boot = true; }, 10e3);  // indicate booted so not to show entity names again
+                    }
                     for (let x = 0; x < state.entity.length; x++) {
                         //   console.log(state.entity[x])
                         if (state.entity[x].id == update.key) {          // identify this entity request with local object
@@ -944,7 +949,7 @@ if (!isMainThread) {
             client.on('error', (error) => {
                 // console.log(error);
                 if (state.reconnect == false) {
-                    log("ESP module went offline, resetting ESP system: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 2);
+                    log("ESP module went offline, resetting ESP system: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 0);
                     state.reconnect = true;
                 }
                 reset();                                                        // if there's a connection problem, start reset sequence
