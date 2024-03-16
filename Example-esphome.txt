@@ -36,6 +36,14 @@ sensor:
   - platform: wifi_signal
     name: "uth-wifi"
     update_interval: 60s
+  - platform: pulse_counter     # example flow meter
+    name: "Flow-Filter"
+    pin: GPIO14
+    update_interval: 1s
+    filters:
+    - lambda: return x;
+    unit_of_measurement: "pps"  # send data as pulses per second or hz
+    accuracy_decimals:  0 
 switch:
   - platform: gpio
     name: "UTH-Relay1"
