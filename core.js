@@ -382,7 +382,7 @@ if (isMainThread) {
                         log("receiving telegram data: " + buf.obj, 4, 0);
                         switch (buf.obj.class) {
                             case "send":
-                                try { bot.sendMessage(buf.obj.id, buf.obj.data, buf.obj.obj); } catch { log("telegram sending error") }
+                                bot.sendMessage(buf.obj.id, buf.obj.data, buf.obj.obj).catch(error => { log("telegram sending error") })
                                 break;
                             case "sub":
                                 let userExist = false;
@@ -518,10 +518,6 @@ if (isMainThread) {
                         sys.checkArgs();
                         log("specified Working Directory: " + cfg.workingDir);
                         log("actual working directory: " + workingDir);
-                        udp.on('listening', () => { log("starting UDP Server - Interface: 127.0.0.1 Port: 65432"); });
-                        udp.on('error', (err) => { console.error(`udp server error:\n${err.stack}`); udp.close(); });
-                        udp.on('message', (msg, info) => { sys.udp(msg, info); });
-                        udp.bind(65432, "127.0.0.1");
                         if (cfg.webDiag) {
                             express.get("/el", function (request, response) { response.send(logs.esp); });
                             express.get("/log", function (request, response) { response.send(logs.sys); });
@@ -625,6 +621,10 @@ if (isMainThread) {
                         } else sys.boot(4);
                         break;
                     case 4:     // start system timer - starts when initial HA Fetch completes
+                        udp.on('listening', () => { log("starting UDP Server - Interface: 127.0.0.1 Port: 65432"); });
+                        udp.on('error', (err) => { console.error(`udp server error:\n${err.stack}`); udp.close(); });
+                        udp.on('message', (msg, info) => { sys.udp(msg, info); });
+                        udp.bind(65432, "127.0.0.1");
                         log("stating websocket service...");
                         if (cfg.homeAssistant) ha.ws();
                         setInterval(() => sys.time.timer(), 1000);
@@ -771,9 +771,9 @@ if (isMainThread) {
                                     if (!message.includes("ESP module went offline, resetting ESP system:")
                                         || !message.includes("ESP module is reconnected: ")
                                         || !message.includes("ESP Module has gone offline: ")) {
-                                        try { bot.sendMessage(state.telegram.users[x], buf); } catch { log("telegram sending error") }
+                                        bot.sendMessage(state.telegram.users[x], buf).catch(error => { log("telegram sending error") })
                                     }
-                                } else try { bot.sendMessage(state.telegram.users[x], buf); } catch { log("telegram sending error") }
+                                } else bot.sendMessage(state.telegram.users[x], buf).catch(error => { log("telegram sending error") })
                             }
                         }
                     }
