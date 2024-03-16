@@ -856,7 +856,7 @@ if (!isMainThread) {
             init: function () {
                 cfg = {};
                 client = null;
-                state = { entity: [], reconnect: false, boot: false };
+                state = { entity: [], reconnect: false, boot: false, rssi: false };
                 sys.lib();
             },
             lib: function () {
@@ -930,11 +930,12 @@ if (!isMainThread) {
                 }
                 data.on('state', (update) => {
                     //   console.log("state change: ", update.key," state: ",  update.state );
-                    if (state.reconnect == true || state.boot == false) {
+                    if (state.rssi == true || state.boot == false) {
                         if (data.config.objectId.includes("wifi"))
                             log("new entity - connected - ID: " + data.id + " - "
                                 + a.color("green", data.config.objectId) + " - Signal: " + update.state, 2);
-                        setTimeout(() => { state.boot = true; }, 10e3);  // indicate booted so not to show entity names again
+                        setTimeout(() => { state.boot = true; }, 20);  // indicate booted so not to show entity names again
+                        state.rssi = false;
                     }
                     for (let x = 0; x < state.entity.length; x++) {
                         //   console.log(state.entity[x])
@@ -951,6 +952,7 @@ if (!isMainThread) {
                 if (state.reconnect == false) {
                     log("ESP module went offline, resetting ESP system: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 0);
                     state.reconnect = true;
+                    state.rssi = true;
                 }
                 reset();                                                        // if there's a connection problem, start reset sequence
             });
