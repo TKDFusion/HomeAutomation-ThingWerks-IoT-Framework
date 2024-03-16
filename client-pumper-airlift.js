@@ -543,7 +543,7 @@ let
         (index, clock) => {
             if (!state.auto[index]) {
                 state.auto[index] = {}
-                log("starting relat tester", 0, 0)
+                log("starting relay tester", 0, 0)
                 for (let x = 0; x < cfg.esp.length; x++) {
                     if (cfg.esp[x].includes("elay")) {
                         em.on("input_boolean." + cfg.esp[x].replace("-", "_"), function (data) {
