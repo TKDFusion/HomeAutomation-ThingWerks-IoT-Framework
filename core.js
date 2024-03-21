@@ -596,7 +596,7 @@ if (isMainThread) {
                                                             log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") Connection failed:" + data, 1, 3)
                                                         else {
                                                             data.forEach(element => { logs.haInputs[x].push(element.entity_id) });
-                                                            if (x == cfg.homeAssistant.length - 1) sys.boot(4);
+                                                            if (x == cfg.homeAssistant.length - 1) setTimeout(() => sys.boot(4), 20e3);
                                                         }
                                                     })
                                                     .catch(err => {
@@ -765,15 +765,17 @@ if (isMainThread) {
                     if (cfg.telegram != undefined && cfg.telegram.enable == true && state.telegram.started == true) {
                         if (level >= cfg.telegram.logLevel
                             || level == 0 && cfg.telegram.logDebug == true) {
-                            for (let x = 0; x < state.telegram.users.length; x++) {
-                                if (cfg.telegram.logESPDisconnect == false) {
-                                    if (!message.includes("ESP module went offline, resetting ESP system:")
-                                        && !message.includes("ESP module is reconnected: ")
-                                        && !message.includes("ESP Module has gone offline: ")) {
-                                        bot.sendMessage(state.telegram.users[x], buf).catch(error => { log("telegram sending error") })
-                                    }
-                                } else bot.sendMessage(state.telegram.users[x], buf).catch(error => { log("telegram sending error") })
-                            }
+                            try {
+                                for (let x = 0; x < state.telegram.users.length; x++) {
+                                    if (cfg.telegram.logESPDisconnect == false) {
+                                        if (!message.includes("ESP module went offline, resetting ESP system:")
+                                            && !message.includes("ESP module is reconnected: ")
+                                            && !message.includes("ESP Module has gone offline: ")) {
+                                            bot.sendMessage(state.telegram.users[x], buf).catch(error => { log("telegram sending error") })
+                                        }
+                                    } else bot.sendMessage(state.telegram.users[x], buf).catch(error => { log("telegram sending error") })
+                                }
+                            } catch (error) { console.log(error, "\nmessage: " + message + "  - Mod: " + mod) }
                         }
                     }
                     if (port != undefined) {
