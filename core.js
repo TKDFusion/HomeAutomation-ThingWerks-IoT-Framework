@@ -568,7 +568,7 @@ if (isMainThread) {
                                 });
                                 bot.on('polling_error', (error) => {
                                     // console.log(error.code);  // => 'EFATAL'
-                                    log("telegram sending polling error")
+                                    //   log("telegram sending polling error")
                                 });
                                 bot.on('webhook_error', (error) => {
                                     // console.log(error.code);  // => 'EPARSE'
@@ -596,7 +596,13 @@ if (isMainThread) {
                                                             log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") Connection failed:" + data, 1, 3)
                                                         else {
                                                             data.forEach(element => { logs.haInputs[x].push(element.entity_id) });
-                                                            if (x == cfg.homeAssistant.length - 1) setTimeout(() => sys.boot(4), 20e3);
+                                                            if (x == cfg.homeAssistant.length - 1) {
+                                                                if (state.ha[x].errorStart == true) {
+                                                                    log("Legacy API has starting error - delaying UDP connections for 30 seconds...");
+                                                                    setTimeout(() => sys.boot(4), 30e3);
+                                                                }
+                                                                else sys.boot(4);
+                                                            }
                                                         }
                                                     })
                                                     .catch(err => {
@@ -610,6 +616,7 @@ if (isMainThread) {
                                             .catch(err => {
                                                 setTimeout(() => {
                                                     log("Legacy API (" + a.color("white", cfg.homeAssistant[x].address) + ") service: Connection failed, retrying....", 1, 2)
+                                                    state.ha[x].errorStart = true;
                                                     haconnect();
                                                 }, 10e3);
                                                 log(err, 1, 2);
@@ -646,7 +653,7 @@ if (isMainThread) {
                     for (let x = 0; x < cfg.homeAssistant.length; x++) {
                         logs.ws.push([]);
                         logs.haInputs.push([]);
-                        state.ha.push({ ws: {} });
+                        state.ha.push({ ws: {}, errorStart: false });
                         ws.push(new WebSocketClient());
                         hass.push(new HomeAssistant({
                             host: "http://" + cfg.homeAssistant[x].address,
