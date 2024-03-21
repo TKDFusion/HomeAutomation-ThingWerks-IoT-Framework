@@ -59,7 +59,7 @@ let
                 },
             },
             {   // DD system example
-                name: "LTH-UTH-Transfer",       // Demand Delivery system name
+                name: "LTH-UTH-Transfer",       // Demand Delivery system 2d
                 ha: {
                     auto: 2,            // home assistant auto toggle ID number (specified above in cfg.ha config)
                     //timer: 1,           // home assistant timer toggle ID number (specified above in cfg.ha config)
@@ -99,8 +99,8 @@ let
                 id: 0,                  // HA or ESP ID number, corresponds to array number (zero indexed) 
                 stop: 3.98,             // Demand Delivery system stop level in (meters) or PSI
                 start: 3.90,            // Demand Delivery system start level (meters) or PSI
-                warn: 2.75,             // threshold to send warning notification
-                average: 40,             // amount of samples to average over
+             // warn: 2.75,             // threshold to send warning notification
+                average: 40,            // amount of samples to average over
                 voltageMin: 0.475,      // calibration, minimum value when sensor is at atmospheric pressure 
                 pressureRating: 15,     // max rated pressure of transducer in PSI
             },
@@ -109,12 +109,12 @@ let
                 unit: "m",              // measurement unit (i.e. PSI or meters) "m" or "psi" only
                 type: "esp",            // the sensor ID in "ha" or "esp" block
                 id: 2,                  // HA or ESP ID number, corresponds to array number (zero indexed) 
-                stop: 1,             // Demand Delivery system stop level in (meters) or PSI
-                start: .8,            // Demand Delivery system start level (meters) or PSI
-                warn: .5,             // threshold to send warning notification
+                stop: 1,                // Demand Delivery system stop level in (meters) or PSI
+                start: .87,             // Demand Delivery system start level (meters) or PSI
+                warn: .5,               // threshold to send warning notification
                 average: 5,             // amount of samples to average over
                 voltageMin: 0.443,      // calibration, minimum value when sensor is at atmospheric pressure 
-                pressureRating: 5,     // max rated pressure of transducer in PSI
+                pressureRating: 5,      // max rated pressure of transducer in PSI
             },
         ],
         flow: [      // config for flow meters used with Home Assistant -- these flow meters get sent back to HA as sensors
@@ -133,12 +133,16 @@ let
             if (state.auto[index] == undefined) init();
             if (clock) {    // called every minute
                 var day = clock.day, dow = clock.dow, hour = clock.hour, min = clock.min;
-                if (hour == 18 && min == 0) {
-                    if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", false);
-                }
                 if (hour == 7 && min == 30) {
                     for (let x = 0; x < cfg.dd.length; x++) { state.auto[index].dd[x].warn.flowDaily = false; } // reset low flow daily warning
                     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", true);
+                }
+                if (hour == 8 && min == 30) {
+                    if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_lth_uth", true);
+                }
+                if (hour == 18 && min == 0) {
+                    if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", false);
+                    if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_lth_uth", false);
                 }
                 calcFlowMeter();
                 file.write.nv();
