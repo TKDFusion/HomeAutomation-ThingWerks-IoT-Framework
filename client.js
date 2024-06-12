@@ -215,7 +215,8 @@ let
             udpClient = require('dgram');
             udp = udpClient.createSocket('udp4');
             if (process.argv[2] == "-i") {
-                log("installing TW-Client-" + moduleName + " service...");
+                moduleName = cfg.moduleName.toLowerCase();
+                log("installing TW-Client-" + cfg.moduleName + " service...");
                 let service = [
                     "[Unit]",
                     "Description=\n",
