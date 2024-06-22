@@ -151,6 +151,22 @@ let
                                 if (cfg.ha != undefined) { send("haFetch"); }
                             }, 1e3);
                             break;
+                        case "sensor":
+                            exist = false;
+                            sensorNum = null;
+                            for (let x = 0; x < state.sensor.length; x++) {
+                                if (state.sensor[x].name == buf.obj.name) {      // a client is sending sensor data for the first time
+                                    state.sensor[x].value = buf.obj.value;
+                                    state.sensor[x].unit = buf.obj.unit;
+                                    exist = true;
+                                    break;
+                                }
+                            }
+                            if (exist == false) {
+                                sensorNum = state.sensor.push({ name: buf.obj.name, value: buf.obj.value, unit: buf.obj.unit }) - 1;
+                                log("sensor:" + sensorNum + " - is registering: " + buf.obj.name + " - " + buf.obj.value + " " + buf.obj.unit);
+                            }
+                            break;
                         case "diag":                // incoming diag refresh request, then reply object
                             send("diag", { state: state, nv: nv, test: "test" });
                             break;
@@ -188,7 +204,7 @@ let
         },
         init: function () {
             nv = {};
-            state = { auto: [], ha: [], esp: [], onlineHA: false, onlineESP: false, online: false };
+            state = { auto: [], ha: [], esp: [], sensor: [], onlineHA: false, onlineESP: false, online: false };
             time = {
                 sec: null, min: null,
                 sync: function () {
@@ -240,6 +256,15 @@ let
                 execSync("service tw-client-" + moduleName + " status");
                 log("service installed and started");
                 console.log("type: journalctl -fu tw-client-" + moduleName);
+                process.exit();
+            }
+            if (process.argv[2] == "-u") {
+                moduleName = cfg.moduleName.toLowerCase();
+                log("uninstalling TW-Client-" + cfg.moduleName + " service...");
+                execSync("systemctl stop tw-client-" + moduleName);
+                execSync("systemctl disable tw-client-" + moduleName + ".service");
+                fs.unlinkSync("/etc/systemd/system/tw-client-" + moduleName + ".service");
+                console.log("TW-Client-" + cfg.moduleName + " service uninstalled");
                 process.exit();
             }
             file = {
@@ -298,6 +323,7 @@ let
         boot: function (step) {
             switch (step) {
                 case 0:
+                    moduleName = cfg.moduleName.toLowerCase();
                     console.log("Loading non-volatile data...");
                     fs.readFile(workingDir + "/nv-" + scriptName + ".json", function (err, data) {
                         if (err) {
@@ -353,5 +379,4 @@ function log(message, index, level) {
     if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
     else send("log", { message: message, mod: state.auto[index].name, level: level });
 }
-
 
