@@ -740,7 +740,7 @@ if (isMainThread) {
                         if (input == undefined) input = '';
                         let c, op = "", bold = ';1m', vbuf = "";
                         for (let x = 0; x < option.length; x++) {
-                            if (option[x] == 0) bold = 'm';         // bold
+                            if (option[x] == 0) bold = 'm';         // Unbold
                             if (option[x] == 1) op = '\x1b[5m';     // blink
                             if (option[x] == 2) op = '\u001b[4m';   // underline
                         }
@@ -794,7 +794,7 @@ if (isMainThread) {
                         case 3: mbuf += "    UDP | "; break;
                         case 4: mbuf += "Telegram| "; break;
                         default:
-                            if (mod != undefined) ubuf += mod + " | ";
+                            if (mod != undefined) ubuf += a.color("green", mod) + " | ";
                             else mbuf += " system | ";
                             break;
                     }
