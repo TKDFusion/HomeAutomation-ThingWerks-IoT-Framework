@@ -107,7 +107,7 @@ if (isMainThread) {
                                     client.pingsLost = 0;
                                     let timeFinish = new Date().getMilliseconds();
                                     let timeResult = timeFinish - client.timeStart;
-                                    if (timeResult > 500) log("websocket (" + a.color("white", config.address) + ") ping is lagging - delay is: " + timeResult + "ms", 1, 2);
+                                    if (timeResult > 1000) log("websocket (" + a.color("white", config.address) + ") ping is lagging - delay is: " + timeResult + "ms", 1, 0);
                                     break;
                                 case "auth_required":
                                     log("Websocket (" + a.color("white", config.address) + ") authenticating", 1);
@@ -357,6 +357,34 @@ if (isMainThread) {
                             state.telegram.port = info.port;
                         }
                         break;
+                    case "sensor":      // incoming sensor state from clients
+                        let exist = false;
+                        if (buf.obj.sensorReg == true) {
+                            log("Client : " + state.udp[id].name == undefined ? id : state.udp[id].name + " is registering for sensor updates", 3, 1);
+                            state.udp[id].sensorReg = true;
+                        } else {
+                            for (let x = 0; x < state.sensor.length; x++) {
+                                if (state.sensor[x].name == buf.obj.name) {      // a client is sending sensor data for the first time
+                                    state.sensor[x].value = buf.obj.value;
+                                    state.sensor[x].unit = buf.obj.unit;
+                                    exist = true;
+                                    break;
+                                }
+                            }
+                            if (exist == false) {
+                                log("Client: " + (state.udp[id].name == undefined ? id : state.udp[id].name) + " - is registering sensor: " + buf.obj.name, 3, 1);
+                                state.sensor.push({ name: buf.obj.name, value: buf.obj.value, unit: buf.obj.unit }) - 1;
+                            }
+                            for (let x = 0; x < state.udp.length; x++) {
+                                if (state.udp[x].sensorReg == true) {
+                                    udp.send(JSON.stringify({
+                                        type: "sensor",
+                                        obj: { name: buf.obj.name, value: buf.obj.value, unit: buf.obj.unit }
+                                    }), state.udp[x].port);
+                                }
+                            }
+                        }
+                        break;
                     case "log":         // incoming log messages from UDP clients
                         log(buf.obj.message, buf.obj.mod, buf.obj.level, port);
                         break;
@@ -386,10 +414,17 @@ if (isMainThread) {
                             case "sub":
                                 let userExist = false;
                                 for (let x = 0; x < state.telegram.users.length; x++) {
-                                    if (state.telegram.users[x] == buf.obj.id) userExist = true;
-                                    break;
+                                    log("checking for existing telegram users: " + state.telegram.users[x], 4, 0);
+                                    if (state.telegram.users[x] == Number(buf.obj.id)) {
+                                        log("telegram user is already registered", 4, 0);
+                                        userExist = true;
+                                        break;
+                                    }
                                 }
-                                if (userExist == false) state.telegram.users.push(buf.obj.id);
+                                if (userExist == false) {
+                                    log("not found, adding new user: " + buf.obj.id, 4, 0);
+                                    state.telegram.users.push(buf.obj.id);
+                                }
                                 break;
                         }
                         break;
@@ -419,7 +454,7 @@ if (isMainThread) {
                 for (let x = 0; x < state.udp.length; x++) {
                     if (state.udp[x].heartBeat == true && time - state.udp[x].time >= 2000) {
                         //  log("removing stale client id: " + x, 3);
-                        log("Client: " + state.udp[x].name + " has crashed!!", 3, 3);
+                        log("Client: " + state.udp[x].name + " has crashed!!", 3, 0);
                         state.udp.splice(x, 1);
                         diag.splice(x, 1);
                         log("rescanning HA inputs")
@@ -639,7 +674,7 @@ if (isMainThread) {
                 }
             },
             init: function () { // initialize system volatile memory
-                state = { udp: [], ha: [], esp: [], perf: { ha: [] } };
+                state = { udp: [], ha: [], esp: [], perf: { ha: [] }, sensor: [] };
                 diag = [];      // array for each UDP client diag
                 ws = [];
                 hass = [];
@@ -871,6 +906,7 @@ if (!isMainThread) {
             lib: function () {
                 events = require('events');
                 em = new events.EventEmitter();
+                require('events').EventEmitter.defaultMaxListeners = 50;
                 a = {
                     color: function (color, input, ...option) {   //  ascii color function for terminal colors
                         if (input == undefined) input = '';
@@ -934,7 +970,7 @@ if (!isMainThread) {
                 if (data.type === "Switch") {                                 // if this is a switch, register the emitter
                     em.on(data.config.objectId, function (id, state) {        // emitter for this connection 
                         // log("setting entity: " + id + " to " + state, 0, 0)
-                        try { data.connection.switchCommandService({ key: id, state: state }); } catch (e) { log(e, 2, 3); reset(); }
+                        try { data.connection.switchCommandService({ key: id, state: state }); } catch (e) { log("error sending command to ESP - " + e, 2, 3); reset(); }
                     });
                 }
                 data.on('state', (update) => {
@@ -968,7 +1004,7 @@ if (!isMainThread) {
         }
         function reset() {
             em.removeAllListeners();                                                // remove all event listeners 
-            client.disconnect();   // disconnect every client 
+            try { client.disconnect(); } catch (err) { log("ESP disconnect failed...", 2); }   // disconnect every client 
             client = null;                                           // delete all client objects 
             setTimeout(() => { espInit(); }, 1000);                                  // reconnect to every device
         }
