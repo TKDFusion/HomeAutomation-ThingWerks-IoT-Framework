@@ -171,7 +171,6 @@ let
     },
     automation = [
         (index, clock) => {
-            time.sync();
             if (state.auto[index] == undefined) init();
             if (clock) {    // called every minute
                 var day = clock.day, dow = clock.dow, hour = clock.hour, min = clock.min;
@@ -668,6 +667,7 @@ let
     sys = {
         com: function () {
             udp.on('message', function (data, info) {
+                time.sync();   // sync the time.  time.sec time.min are global vars containing epoch time  
                 let buf = JSON.parse(data);
                 if (buf.type != "async") {
                     //  console.log(buf);
