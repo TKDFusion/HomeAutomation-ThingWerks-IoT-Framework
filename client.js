@@ -380,3 +380,4 @@ function log(message, index, level) {
     if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
     else send("log", { message: message, mod: state.auto[index].name, level: level });
 }
+
