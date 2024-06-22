@@ -12,9 +12,8 @@ let
             "myEspEntity",                  // this index order is used for incoming state events and output calls as well (ie state.esp[0] etc...)
         ]
     },
-    automation = [                                                          // create an (index, clock) => {},  array member function for each automation 
+    automation = [                                                          // create an (index, clock) => {},  array member function for each automation you want to create
         (index, clock) => {
-            time.sync();                                                    // sync the time.  time.sec time.min are global vars containing epoch time  
             if (!state.auto[index]) {         // this block gets run once
                 state.auto.push({                                           // create object for this automation, 
                     name: "Auto-System",                                    // give it a name and 
@@ -22,11 +21,12 @@ let
                 });
                 setInterval(() => { automation[index](index); }, 1e3);      // set minimum rerun time, otherwise this automation function will only on ESP and HA events
                 log("system started", index, 1);                            // log automation start with index number and severity 
-                em.on("state" + "input_button.test", () => button.test());  // create an event emitter for this entities like buttons that call a member function
+                em.on("state" + "input_button.test", () => button.test());  // create an event emitter for HA or ESP entities that call a member function when data is received
+                send("sensor", { sensorReg: true });                        // register with core to receive sensor data from other clients that are sending sensor data 
             }
             let st = state.auto[index];                                     // set automation state object's shorthand name to "st" (state) 
             st.fan.ha = {                                                   // assign relevant HA entities for this device 
-                state: state.ha[3], auto: state.ha[2]                       // assign relevant HA entity stats  
+                state: state.ha[3], auto: state.ha[2]                       // assign relevant HA helper entities
                 , timeOn: state.ha[0], timeOff: state.ha[1]
             }
             let button = {
@@ -107,6 +107,7 @@ let
     sys = {
         com: function () {
             udp.on('message', function (data, info) {
+                time.sync();   // sync the time.  time.sec time.min are global vars containing epoch time  
                 let buf = JSON.parse(data);
                 if (buf.type != "async") {
                     //  console.log(buf);
@@ -379,4 +380,3 @@ function log(message, index, level) {
     if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
     else send("log", { message: message, mod: state.auto[index].name, level: level });
 }
-
