@@ -14,6 +14,7 @@ let
             "input_boolean.uth_relay2",
             "input_boolean.uth_relay3",
             "input_boolean.uth_relay4",
+            "input_boolean.auto_uth_pump",
         ],
         esp: [
             "lth-tank",
@@ -24,6 +25,7 @@ let
             "uth-relay2",
             "uth-relay3",
             "uth-relay4",
+            "uth-pump"
         ],
         dd: [       // config for the Demand/Delivery automation function, 1 object for each DD system
             {   // DD system example
@@ -53,7 +55,7 @@ let
                 fault: {
                     retry: 10,          // time in seconds to wait for retry
                     retryFinal: 2,      // time in minutes to wait for final retry
-                    runLong: 480,       // max run time in minutes
+                    runLong: 600,       // max run time in minutes
                     cycleCount: 3,      // max cycle times per cycleTime window
                     cycleTime: 120,     // max cycleTime time window  (in seconds)
                 },
@@ -85,7 +87,36 @@ let
                 fault: {
                     retry: 10,          // time in seconds to wait for retry
                     retryFinal: 2,      // time in minutes to wait for final retry
-                    runLong: 480,       // max run time in minutes
+                    runLong: 60,       // max run time in minutes
+                    cycleCount: 3,      // max cycle times per cycleTime window
+                    cycleTime: 120,     // max cycleTime time window  (in seconds)
+                },
+            },
+            {   // DD system example
+                name: "UTH-Pressure",       // Demand Delivery system 2d
+                ha: {
+                    auto: 7,            // home assistant auto toggle ID number (specified above in cfg.ha config)
+                    //timer: 1,           // home assistant timer toggle ID number (specified above in cfg.ha config)
+                },
+                pump: [
+                    {
+                        id: 4,              // ESP/HA cfg ID number
+                        type: "esp",
+                        class: "single",
+                        name: "1/2 HP Speroni",
+                    },
+                ],
+                press: {
+                    output: 2,          // pressure sensor number (in cfg.press block)
+                    input: undefined
+                },
+                flow: {
+                    id: undefined,      // flow sensor number (in cfg.flow block)
+                },
+                fault: {
+                    retry: 10,          // time in seconds to wait for retry
+                    retryFinal: 2,      // time in minutes to wait for final retry
+                    runLong: 60,       // max run time in minutes
                     cycleCount: 3,      // max cycle times per cycleTime window
                     cycleTime: 120,     // max cycleTime time window  (in seconds)
                 },
@@ -99,9 +130,9 @@ let
                 id: 0,                  // HA or ESP ID number, corresponds to array number (zero indexed) 
                 stop: 3.98,             // Demand Delivery system stop level in (meters) or PSI
                 start: 3.90,            // Demand Delivery system start level (meters) or PSI
-             // warn: 2.75,             // threshold to send warning notification
+                // warn: 2.75,             // threshold to send warning notification
                 average: 40,            // amount of samples to average over
-                voltageMin: 0.475,      // calibration, minimum value when sensor is at atmospheric pressure 
+                voltageMin: 0.566,      // calibration, minimum value when sensor is at atmospheric pressure 
                 pressureRating: 15,     // max rated pressure of transducer in PSI
             },
             {   // Tank 1 example
@@ -112,9 +143,20 @@ let
                 stop: 1,                // Demand Delivery system stop level in (meters) or PSI
                 start: .87,             // Demand Delivery system start level (meters) or PSI
                 warn: .5,               // threshold to send warning notification
-                average: 5,             // amount of samples to average over
+                average: 40,             // amount of samples to average over
                 voltageMin: 0.443,      // calibration, minimum value when sensor is at atmospheric pressure 
                 pressureRating: 5,      // max rated pressure of transducer in PSI
+            },
+            {   // Tank 1 example
+                name: "pump_uth",       // tank name (do not use spaces or dash, underscore only)
+                unit: "psi",              // measurement unit (i.e. PSI or meters) "m" or "psi" only
+                type: "esp",            // the sensor ID in "ha" or "esp" block
+                id: 8,                  // HA or ESP ID number, corresponds to array number (zero indexed) 
+                stop: 28,                // Demand Delivery system stop level in (meters) or PSI
+                start: 22,             // Demand Delivery system start level (meters) or PSI
+                average: 5,             // amount of samples to average over
+                voltageMin: 0.609,      // calibration, minimum value when sensor is at atmospheric pressure 
+                pressureRating: 174,      // max rated pressure of transducer in PSI
             },
         ],
         flow: [      // config for flow meters used with Home Assistant -- these flow meters get sent back to HA as sensors
@@ -133,16 +175,20 @@ let
             if (state.auto[index] == undefined) init();
             if (clock) {    // called every minute
                 var day = clock.day, dow = clock.dow, hour = clock.hour, min = clock.min;
-                if (hour == 7 && min == 30) {
+                if (hour == 7 && min == 0) {
                     for (let x = 0; x < cfg.dd.length; x++) { state.auto[index].dd[x].warn.flowDaily = false; } // reset low flow daily warning
-                    if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", true);
+                    if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_uth_pump", true);
+                    //     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", true);
                 }
                 if (hour == 8 && min == 30) {
-                    if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_lth_uth", true);
+                    //     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_lth_uth", true);
                 }
                 if (hour == 18 && min == 0) {
                     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", false);
                     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_lth_uth", false);
+                }
+                if (hour == 19 && min == 30) {
+                    if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_uth_pump", false);
                 }
                 calcFlowMeter();
                 file.write.nv();
@@ -478,10 +524,10 @@ let
                     for (let y = 0; y < 4; y++) {
                         if (state.auto[index].ha.pushLast[pos] == undefined) {
                             state.auto[index].ha.pushLast.push(Number(value[y]).toFixed(2));
-                            send(cfg.flow[x].name + list[y], Number(value[y]).toFixed(2), unit[y]);
+                            sendHA(cfg.flow[x].name + list[y], Number(value[y]).toFixed(2), unit[y]);
                         } else if (state.auto[index].ha.pushLast[pos] != Number(value[y]).toFixed(2)) {
                             state.auto[index].ha.pushLast[pos] = (Number(value[y]).toFixed(2));
-                            send(cfg.flow[x].name + list[y], Number(value[y]).toFixed(2), unit[y]);
+                            sendHA(cfg.flow[x].name + list[y], Number(value[y]).toFixed(2), unit[y]);
                         }
                         pos++;
                     }
@@ -507,11 +553,14 @@ let
                     press.out.psi = (calc.psi < 0.0) ? 0 : Number(calc.psi.toFixed(2));
                     press.out.meters = (calc.meters < 0.0) ? 0 : Number(calc.meters.toFixed(2));
                     press.out.percent = (calc.percent[2] < 0.0) ? 0 : calc.percent[2];
-                    send(press.cfg.name + "_percent", press.out.percent.toFixed(0), '%');
-                    send(press.cfg.name + "_meters", press.out.meters.toFixed(2), 'm');
-                    send(press.cfg.name + "_psi", press.out.psi.toFixed(2), 'psi');
+                    sendHA(press.cfg.name + "_percent", press.out.percent.toFixed(0), '%');
+                    sendHA(press.cfg.name + "_meters", press.out.meters.toFixed(2), 'm');
+                    sendHA(press.cfg.name + "_psi", press.out.psi.toFixed(0), 'psi');
+                    send("sensor", { name: press.cfg.name + "_percent", value: press.out.percent.toFixed(0), unit: '%' });
+                    send("sensor", { name: press.cfg.name + "_meters", value: press.out.meters.toFixed(2), unit: 'm' });
+                    send("sensor", { name: press.cfg.name + "_psi", value: press.out.psi.toFixed(0), unit: 'psi' });
                 }
-                function send(name, value, unit) { setTimeout(() => { ha.send(name, value, unit) }, sendDelay); sendDelay += 25; }
+                function sendHA(name, value, unit) { setTimeout(() => { ha.send(name, value, unit) }, sendDelay); sendDelay += 25; };
             }
             function calcFlow() {
                 for (let x = 0; x < cfg.flow.length; x++) {
@@ -663,6 +712,22 @@ let
                                 if (cfg.ha != undefined) { send("haFetch"); }
                             }, 1e3);
                             break;
+                        case "sensor":
+                            exist = false;
+                            sensorNum = null;
+                            for (let x = 0; x < state.sensor.length; x++) {
+                                if (state.sensor[x].name == buf.obj.name) {      // a client is sending sensor data for the first time
+                                    state.sensor[x].value = buf.obj.value;
+                                    state.sensor[x].unit = buf.obj.unit;
+                                    exist = true;
+                                    break;
+                                }
+                            }
+                            if (exist == false) {
+                                sensorNum = state.sensor.push({ name: buf.obj.name, value: buf.obj.value, unit: buf.obj.unit }) - 1;
+                                log("sensor:" + sensorNum + " - is registering: " + buf.obj.name + " - " + buf.obj.value + " " + buf.obj.unit);
+                            }
+                            break;
                         case "diag":                // incoming diag refresh request, then reply object
                             send("diag", { state: state, nv: nv, test: "test" });
                             break;
@@ -700,7 +765,7 @@ let
         },
         init: function () {
             nv = {};
-            state = { auto: [], ha: [], esp: [], onlineHA: false, onlineESP: false, online: false };
+            state = { auto: [], ha: [], esp: [], sensor: [], onlineHA: false, onlineESP: false, online: false };
             time = {
                 sec: null, min: null,
                 sync: function () {
@@ -727,7 +792,8 @@ let
             udpClient = require('dgram');
             udp = udpClient.createSocket('udp4');
             if (process.argv[2] == "-i") {
-                log("installing TW-Client-" + moduleName + " service...");
+                moduleName = cfg.moduleName.toLowerCase();
+                log("installing TW-Client-" + cfg.moduleName + " service...");
                 let service = [
                     "[Unit]",
                     "Description=\n",
@@ -751,6 +817,15 @@ let
                 execSync("service tw-client-" + moduleName + " status");
                 log("service installed and started");
                 console.log("type: journalctl -fu tw-client-" + moduleName);
+                process.exit();
+            }
+            if (process.argv[2] == "-u") {
+                moduleName = cfg.moduleName.toLowerCase();
+                log("uninstalling TW-Client-" + cfg.moduleName + " service...");
+                execSync("systemctl stop tw-client-" + moduleName);
+                execSync("systemctl disable tw-client-" + moduleName + ".service");
+                fs.unlinkSync("/etc/systemd/system/tw-client-" + moduleName + ".service");
+                console.log("TW-Client-" + cfg.moduleName + " service uninstalled");
                 process.exit();
             }
             file = {
@@ -809,6 +884,7 @@ let
         boot: function (step) {
             switch (step) {
                 case 0:
+                    moduleName = cfg.moduleName.toLowerCase();
                     console.log("Loading non-volatile data...");
                     fs.readFile(workingDir + "/nv-" + scriptName + ".json", function (err, data) {
                         if (err) {
