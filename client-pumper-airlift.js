@@ -63,8 +63,8 @@ let
             {   // DD system example
                 name: "LTH-UTH-Transfer",       // Demand Delivery system 2d
                 ha: {
-                    auto: 2,            // home assistant auto toggle ID number (specified above in cfg.ha config)
-                    //timer: 1,           // home assistant timer toggle ID number (specified above in cfg.ha config)
+                    auto: 2,                // home assistant auto toggle ID number (specified above in cfg.ha config)
+                    //timer: 1,             // home assistant timer toggle ID number (specified above in cfg.ha config)
                 },
                 pump: [
                     {
@@ -75,28 +75,32 @@ let
                     },
                 ],
                 press: {
-                    output: 1,          // pressure sensor number (in cfg.press block)
-                    input: undefined
+                    output: 1,              // pressure sensor number (in cfg.press block)
+                    outputRiseTime: 600,    // time to wait to check for level rise
+                    outputRiseWarn: 5,      // level the tank must rise to   percentage for level/meter sensors and psi for pressure tanks
+                    outputRiseError: 3,     // level to throw warning
+                    input: 0,               // input tank feeding the pump
+                    inputMin: 15            // minimum input level in percent
                 },
                 flow: {
-                    id: undefined,      // flow sensor number (in cfg.flow block)
-                    startWarn: 70,      // min start flow before triggering notification (useful for filters)
-                    startError: 20,     // minimum flow rate pump must reach at start
-                    startWait: 6,       // seconds to wait before checking flow after pump starts
+                    id: undefined,          // flow sensor number (in cfg.flow block)
+                    startWarn: 70,          // min start flow before triggering notification (useful for filters)
+                    startError: 20,         // minimum flow rate pump must reach at start
+                    startWait: 6,           // seconds to wait before checking flow after pump starts
                 },
                 fault: {
-                    retry: 10,          // time in seconds to wait for retry
-                    retryFinal: 2,      // time in minutes to wait for final retry
-                    runLong: 60,       // max run time in minutes
-                    cycleCount: 3,      // max cycle times per cycleTime window
-                    cycleTime: 120,     // max cycleTime time window  (in seconds)
+                    retry: 10,              // time in seconds to wait for retry
+                    retryFinal: 2,          // time in minutes to wait for final retry
+                    runLong: 60,            // max run time in minutes
+                    cycleCount: 3,          // max cycle times per cycleTime window
+                    cycleTime: 120,         // max cycleTime time window  (in seconds)
                 },
             },
             {   // DD system example
                 name: "UTH-Pressure",       // Demand Delivery system 2d
                 ha: {
-                    auto: 7,            // home assistant auto toggle ID number (specified above in cfg.ha config)
-                    //timer: 1,           // home assistant timer toggle ID number (specified above in cfg.ha config)
+                    auto: 7,                // home assistant auto toggle ID number (specified above in cfg.ha config)
+                    //timer: 1,             // home assistant timer toggle ID number (specified above in cfg.ha config)
                 },
                 pump: [
                     {
@@ -110,7 +114,7 @@ let
                     output: 2,          // pressure sensor number (in cfg.press block)
                     input: undefined
                 },
-                flow: {
+                flow: {                 // object must be declared
                     id: undefined,      // flow sensor number (in cfg.flow block)
                 },
                 fault: {
@@ -130,7 +134,7 @@ let
                 id: 0,                  // HA or ESP ID number, corresponds to array number (zero indexed) 
                 stop: 3.98,             // Demand Delivery system stop level in (meters) or PSI
                 start: 3.90,            // Demand Delivery system start level (meters) or PSI
-                // warn: 2.75,             // threshold to send warning notification
+                // warn: 2.75,          // threshold to send warning notification on pump start
                 average: 40,            // amount of samples to average over
                 voltageMin: 0.566,      // calibration, minimum value when sensor is at atmospheric pressure 
                 pressureRating: 15,     // max rated pressure of transducer in PSI
@@ -142,21 +146,21 @@ let
                 id: 2,                  // HA or ESP ID number, corresponds to array number (zero indexed) 
                 stop: 1,                // Demand Delivery system stop level in (meters) or PSI
                 start: .87,             // Demand Delivery system start level (meters) or PSI
-                warn: .5,               // threshold to send warning notification
-                average: 40,             // amount of samples to average over
+                // warn: .5,            // threshold to send warning notification on pump start
+                average: 40,            // amount of samples to average over
                 voltageMin: 0.443,      // calibration, minimum value when sensor is at atmospheric pressure 
                 pressureRating: 5,      // max rated pressure of transducer in PSI
             },
             {   // Tank 1 example
                 name: "pump_uth",       // tank name (do not use spaces or dash, underscore only)
-                unit: "psi",              // measurement unit (i.e. PSI or meters) "m" or "psi" only
+                unit: "psi",            // measurement unit (i.e. PSI or meters) "m" or "psi" only
                 type: "esp",            // the sensor ID in "ha" or "esp" block
                 id: 8,                  // HA or ESP ID number, corresponds to array number (zero indexed) 
-                stop: 28,                // Demand Delivery system stop level in (meters) or PSI
-                start: 22,             // Demand Delivery system start level (meters) or PSI
+                stop: 28,               // Demand Delivery system stop level in (meters) or PSI
+                start: 22,              // Demand Delivery system start level (meters) or PSI
                 average: 5,             // amount of samples to average over
                 voltageMin: 0.609,      // calibration, minimum value when sensor is at atmospheric pressure 
-                pressureRating: 174,      // max rated pressure of transducer in PSI
+                pressureRating: 174,    // max rated pressure of transducer in PSI
             },
         ],
         flow: [      // config for flow meters used with Home Assistant -- these flow meters get sent back to HA as sensors
@@ -249,50 +253,21 @@ let
                                     log(dd.cfg.name + " - pump: " + dd.pump[0].name + " - max runtime exceeded - DD system shutting down", index, 3);
                                     ha.send(dd.auto.name, false);
                                     dd.auto.state = false;
-                                }
-                                if (dd.state.flowCheck == true && dd.flow != undefined) {
-                                    if (dd.flow.lm < dd.cfg.flow.startError) {
-                                        dd.fault.flow = true;
-                                        if (dd.fault.flowRestarts < 3) {
-                                            log(dd.cfg.name + " - flow check FAILED!! (" + dd.flow.lm.toFixed(1) + "lm) HA Pump State: "
-                                                + dd.pump[0].state + " - waiting for retry " + (dd.fault.flowRestarts + 1), index, 2);
-                                            dd.fault.flowRestarts++;
-                                            flowTimer[x] = setTimeout(() => {
-                                                dd.fault.flow = false; log(dd.cfg.name + " - pump restating", index, 1);
-                                            }, dd.cfg.fault.retry * 1000);
-                                        } else if (dd.fault.flowRestarts == 3) {
-                                            log(dd.cfg.name + " - low flow (" + dd.flow.lm.toFixed(1) + "lm) HA State: "
-                                                + dd.pump[0].state + " - retries exceeded - going offline for " + dd.cfg.fault.retryFinal + "m", index, 3);
-                                            dd.fault.flowRestarts++;
-                                            flowTimer[x] = setTimeout(() => {
-                                                dd.fault.flow = false; log(dd.cfg.name + " - pump restating", index, 1);
-                                            }, dd.cfg.fault.retryFinal * 60 * 1000);
-                                        }
-                                        else {
-                                            dd.fault.flowRestarts++;
-                                            log(dd.cfg.name + " - low flow (" + dd.flow.lm.toFixed(1) + "lm) HA State: "
-                                                + dd.pump[0].state + " - all retries failed - going OFFLINE permanently", index, 3);
-                                            ha.send(dd.auto.name, false);
-                                            dd.auto.state = false;
-                                        }
-                                        pumpStop();
-                                    } else {
-                                        if (dd.state.flowCheckPassed == false) {
-                                            log(dd.cfg.name + " - pump flow check PASSED (" + dd.flow.lm.toFixed(1) + "lm)", index, 1);
-                                            dd.state.flowCheckPassed = true;
-                                            dd.fault.flowRestarts = 0;
-                                            if (dd.flow.lm < dd.cfg.flow.startWarn && dd.warn.flowDaily == false) {
-                                                dd.warn.flowDaily = true;
-                                                log(dd.cfg.name + " - pump flow is lower than optimal (" + dd.flow.lm.toFixed(1) + "lm) - clean filter", index, 2);
-                                            }
-                                        }
-                                    }
+                                    return;
                                 }
                                 if (dd.flow == undefined && dd.state.timeoutOn == true && dd.pump[0].state === false) {
                                     log(dd.cfg.name + " - is out of sync - auto is on, system is RUN but pump is off", index, 2);
                                     pumpStart(true);
                                     return;
                                 }
+                                if (dd.press.in != undefined && dd.press.in.state.percent <= dd.cfg.press.inputMin) {
+                                    log(dd.cfg.name + " - input tank level is too low - DD system shutting down", index, 3);
+                                    ha.send(dd.auto.name, false);
+                                    dd.auto.state = false;
+                                    return;
+                                }
+                                if (dd.cfg.press.outputRiseTime != undefined) pumpPressCheck();
+                                if (dd.flow != undefined) pumpFlowCheck();
                                 break;
                         }
                         if (dd.warn.tankLow != undefined && dd.press.out.state.meters <= (dd.press.out.cfg.warn) && dd.warn.tankLow == false) {
@@ -303,7 +278,7 @@ let
                         break;
                     case false:  // when auto is OFFLINE
                         if (dd.state.timeoutOff == true) {
-                            if (dd.pump[0].state === true) {
+                            if (dd.pump[0].state === true) {        // this is mainly to sync the state of pumper after a service restart
                                 log(dd.cfg.name + " - is out of sync - auto is off but pump is on - switching auto ON", index, 2);
                                 ha.send(dd.auto.name, true);
                                 dd.auto.state = true;
@@ -328,6 +303,7 @@ let
                 function pumpStart(sendOut) {
                     if (dd.state.cycleCount == 0) {
                         dd.state.cycleTimer = time.sec;
+                        dd.state.timerRise = time.sec;
                     } else if (dd.state.cycleCount > dd.cfg.fault.cycleCount) {
                         if (time.sec - dd.state.cycleTimer < dd.cfg.fault.cycleTime) {
                             log(dd.cfg.name + " - pump is cycling to frequently - DD system shutting down", index, 3);
@@ -335,6 +311,16 @@ let
                             dd.auto.state = false;
                             return;
                         } else { dd.state.cycleTimer = time.sec; dd.state.cycleCount = 0; }
+                    }
+                    if (dd.press.in != undefined && dd.press.in.state.percent <= dd.cfg.press.inputMin) {
+                        log(dd.cfg.name + " - input tank level is too low - DD system shutting down", index, 3);
+                        ha.send(dd.auto.name, false);
+                        dd.auto.state = false;
+                        return;
+                    }
+                    if (dd.press.out != undefined) {
+                        if (dd.press.out.cfg.unit == "m") dd.state.pressStart = dd.press.out.state.percent;
+                        if (dd.press.out.cfg.unit == "psi") dd.state.pressStart = dd.press.out.state.psi;
                     }
                     dd.state.cycleCount++;
                     if (dd.flow != undefined) { dd.flow.batch = nv.flow[dd.cfg.flow.id].total; }
@@ -377,6 +363,79 @@ let
                     if (dd.pump[0].cfg.type == "ha") ha.send(cfg.ha[dd.pump[0].id], false);
                     else esp.send(dd.pump[0].name, false);
                     setTimeout(() => { dd.state.timeoutOff = true }, 10e3);
+                }
+                function pumpPressCheck() {
+                    if (time.sec - dd.state.timerRise >= dd.cfg.press.outputRiseTime) {
+                        if (dd.press.out.cfg.unit == "m") {
+                            log("checking pressure rise, previous: " + dd.state.pressStart + "  current: " + dd.press.out.state.percent
+                                + "  difference: " + (dd.press.out.state.percent - dd.state.pressStart) + "%", index, 0);
+                            if (!(dd.press.out.state.percent - dd.state.pressStart) > dd.cfg.press.outputRiseError) {
+                                if (type == 0) log(dd.cfg.name + " - tank level not rising - DD system shutting down", index, 3);
+                                ha.send(dd.auto.name, false);
+                                dd.auto.state = false;
+                                return;
+                            }
+                            else if (!(dd.press.out.state.percent - dd.state.pressStart) > dd.cfg.press.outputRiseWarn) {
+                                if (type == 0) log(dd.cfg.name + " - tank level not rising", index, 2);
+                            }
+                            dd.state.pressStart = dd.press.out.state.percent;
+                        }
+                        if (dd.press.out.cfg.unit == "psi") {
+                            log("checking pressure rise, previous: " + dd.state.pressStart + "  current: " + dd.press.out.state.percent
+                                + "  difference: " + (dd.press.out.state.percent - dd.state.pressStart) + "psi", index, 0);
+                            if (!(dd.press.out.state.psi - dd.state.pressStart) > dd.cfg.press.outputRiseError) {
+                                if (type == 0) log(dd.cfg.name + " - tank level not rising - DD system shutting down", index, 3);
+                                ha.send(dd.auto.name, false);
+                                dd.auto.state = false;
+                                return;
+                            }
+                            else if (!(dd.press.out.state.psi - dd.state.pressStart) > dd.cfg.press.outputRiseWarn) {
+                                if (type == 0) log(dd.cfg.name + " - tank level not rising", index, 2);
+                            }
+                            dd.state.pressStart = dd.press.out.state.psi;
+                        }
+                        dd.state.timerRise = time.sec;
+                    }
+                }
+                function pumpFlowCheck() {
+                    if (dd.state.flowCheck == true) {
+                        if (dd.flow.lm < dd.cfg.flow.startError) {
+                            dd.fault.flow = true;
+                            if (dd.fault.flowRestarts < 3) {
+                                log(dd.cfg.name + " - flow check FAILED!! (" + dd.flow.lm.toFixed(1) + "lm) HA Pump State: "
+                                    + dd.pump[0].state + " - waiting for retry " + (dd.fault.flowRestarts + 1), index, 2);
+                                dd.fault.flowRestarts++;
+                                flowTimer[x] = setTimeout(() => {
+                                    dd.fault.flow = false; log(dd.cfg.name + " - pump restating", index, 1);
+                                }, dd.cfg.fault.retry * 1000);
+                            } else if (dd.fault.flowRestarts == 3) {
+                                log(dd.cfg.name + " - low flow (" + dd.flow.lm.toFixed(1) + "lm) HA State: "
+                                    + dd.pump[0].state + " - retries exceeded - going offline for " + dd.cfg.fault.retryFinal + "m", index, 3);
+                                dd.fault.flowRestarts++;
+                                flowTimer[x] = setTimeout(() => {
+                                    dd.fault.flow = false; log(dd.cfg.name + " - pump restating", index, 1);
+                                }, dd.cfg.fault.retryFinal * 60 * 1000);
+                            }
+                            else {
+                                dd.fault.flowRestarts++;
+                                log(dd.cfg.name + " - low flow (" + dd.flow.lm.toFixed(1) + "lm) HA State: "
+                                    + dd.pump[0].state + " - all retries failed - going OFFLINE permanently", index, 3);
+                                ha.send(dd.auto.name, false);
+                                dd.auto.state = false;
+                            }
+                            pumpStop();
+                        } else {
+                            if (dd.state.flowCheckPassed == false) {
+                                log(dd.cfg.name + " - pump flow check PASSED (" + dd.flow.lm.toFixed(1) + "lm)", index, 1);
+                                dd.state.flowCheckPassed = true;
+                                dd.fault.flowRestarts = 0;
+                                if (dd.flow.lm < dd.cfg.flow.startWarn && dd.warn.flowDaily == false) {
+                                    dd.warn.flowDaily = true;
+                                    log(dd.cfg.name + " - pump flow is lower than optimal (" + dd.flow.lm.toFixed(1) + "lm) - clean filter", index, 2);
+                                }
+                            }
+                        }
+                    }
                 }
                 function listener() {
                     log(dd.cfg.name + " - creating event listeners", index, 1);
@@ -453,7 +512,9 @@ let
                             timeoutOff: true,
                             timeoutOn: false,
                             cycleCount: 0,
-                            timerRun: null
+                            timerRun: null,
+                            pressStart: null,
+                            timerRise: null,
                         },
                         fault: {
                             flow: false,
