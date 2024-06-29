@@ -79,7 +79,6 @@ let
             runs pumps for 1hr every 24hours if at critical level 20%
 
             if battery is very low, turn off all pumps
-            why do both pump and solar have telegram user list but im only one pumper but get solar also???
             */
             function calcVoltsDC() {
                 let sunConverted = (state.esp[10] * 100).toFixed(0);
