@@ -10,23 +10,28 @@ let
             "input_boolean.auto_inverter",
             "input_boolean.auto_solar",
             "input_boolean.auto_compressor",
-            "input_boolean.auto_lth_uth",
+            "input_boolean.auto_pump_transfer",
         ],
         esp: [                              // add all your ESP entities here
-            "dc1-volts",
-            "battery-relay1",   // inverter 8.2kw
-            "battery-relay2",
-            "battery-relay3",
-            "battery-relay4",   // fan 
-            "ac1-power",        // inverter watts
-            "ac1-energy",       // inverter energy
-            "ac2-voltage",      // grid voltage
-            "ac2-power",        // grid watts
-            "ac2-energy",       // grid kwh
+            "battery-voltage",
+            "power1-relay1",
+            "power1-relay2",
+            "power1-relay3",    // inverter 8kw
+            "power1-relay4",    // inverter 10kw
+            "8kw-power",        // 8kw// inverter 8.2kw watts
+            "8kw-energy",       // 8kw energy
+            "grid-voltage",      // grid voltage
+            "grid-power",        // grid watts
+            "grid-energy",       // grid kwh
             "sunlight",
-            "temp-room",
+            "temp-battery-room",
             "lth-relay1",       // compressor
-            "uth-relay1",       // compressor
+            "uth-relay1",       // 1/2hp pump
+            "10kw-power",        // 10kw watts
+            "10kw-energy",       // 10kw watts
+            "battery-power",    // battery amps
+            "battery-energy",    // battery amps
+            "battery-voltage2",
         ],
         grid: {
             espVoltage: 7,
@@ -35,11 +40,10 @@ let
         solar: {
             haAutomation: 1,
             espSunlight: 10,
-            p1sunlightOn: 2.5,
-            p1sunlightOff: 2.2,
-            p1batVoltageOn: 53.5,
-            p1batVoltageOff: 53.2,
-            p1HA: [2],
+            priority: [
+                { onSun: 2.6, offSun: 2.4, onVolts: 53.5, offVolts: 53.2 },
+                { onSun: 2.79, offSun: 2.5, onVolts: 53.5, offVolts: 53.2 }
+            ],
         },
         inverter: [
             {
@@ -49,6 +53,7 @@ let
                 espVoltage: 0,
                 espPower: 5,
                 espFan: 2,              // equipment room fan
+                voltsFactor: 20.33,
                 voltsRun: 53.0,
                 voltsStop: 51.4,
                 welderWatts: 4000,      // high loads detected
@@ -60,53 +65,94 @@ let
         (index, clock) => {                                       // sync the time.  time.sec time.min are global vars containing epoch time  
             if (state.auto[index] == undefined) init();
             let st = state.auto[index];                                     // set automation state object's shorthand name to "st" (state) 
-            function init() {
-                state.auto.push({                                           // create object for this automation, 
-                    name: "Solar",                                          // give this automation a name 
-                    inverter: { state: null, step: time.sec },
-                    grid: { state: null, step: time.sec },
-
-                    welder: false,
-                    welderStep: null,
-                    pumper: {
-                        priority1run: null,
-                    }
-                });
-                setInterval(() => { automation[index](index); }, 1e3);      // set minimum rerun time, otherwise this automation function will only on ESP and HA events
-                emitters();
-                log("automation system started", index, 1);                 // log automation start with index number and severity 
-                send("sensor", { sensorReg: true });
-            }
-            welderDetection();
+            calcVoltsDC();
+            //   welderDetection();
             gridDetection();
             inverterAuto();     // inverterAuto calls solarAutomation
+            // calcSolarPower() // try to map sunlight sensor to KW
             /*
+            test  sensor.voltage_grid for reading (is NaN? or null) with grid switched off
+
             if on grid during blackout, switch to inverter if under certain voltage
 
             priority 2 - run pump from grid if at critical level
             runs pumps for 1hr every 24hours if at critical level 20%
 
+            if battery is very low, turn off all pumps
             why do both pump and solar have telegram user list but im only one pumper but get solar also???
             */
+            function calcVoltsDC() {
+                let sunConverted = (state.esp[10] * 100).toFixed(0);
+                let solarPower = Math.round(state.esp[16] + state.esp[14] + state.esp[4]);
+                //   if (st.sunlight[state.esp[10]].high == undefined) 
+                ha.send("solar_power", Math.round(solarPower), "w");
+                st.voltsDC = state.esp[cfg.inverter[0].espVoltage] * cfg.inverter[0].voltsFactor;
+                ha.send("volts_dc_Battery", parseFloat(st.voltsDC).toFixed(2), "v");
+            }
             function solarAutomation() {
-
-                if (state.esp[cfg.solar.espSunlight] >= cfg.solar.p1sunlightOn
-                    && state.esp[cfg.inverter[0].espVoltage] >= cfg.solar.p1batVoltageOn) {
-                    if (st.pumper.priority1run == false || st.pumper.priority1run == null) {
+                if (state.esp[cfg.solar.espSunlight] >= cfg.solar.priority[0].onSun
+                    && st.voltsDC >= cfg.solar.priority[0].onVolts) {
+                    if (st.priority[0] == false || st.priority[0] == null) {
                         log("Sun is high (" + state.esp[cfg.solar.espSunlight].toFixed(2) + "v) - starting priority 1 devices", index, 1);
-                        st.pumper.priority1run = true;
+                        st.priority[0] = true;
                         ha.send("input_boolean.auto_compressor", true);
-                        //                      ha.send("input_boolean.auto_lth_uth", true);
                     }
                 }
-                if (state.esp[cfg.solar.espSunlight] <= cfg.solar.p1sunlightOff
-                    || state.esp[cfg.inverter[0].espVoltage] <= cfg.solar.p1batVoltageOff) {
-                    if (st.pumper.priority1run == true || st.pumper.priority1run == null) {
+                if (state.esp[cfg.solar.espSunlight] <= cfg.solar.priority[0].offSun
+                    || st.voltsDC <= cfg.solar.priority[0].offVolts) {
+                    if (st.priority[0] == true || st.priority[0] == null) {
                         log("Sun is low (" + state.esp[cfg.solar.espSunlight].toFixed(2) + "v) - stopping priority 1 devices", index, 1);
-                        st.pumper.priority1run = false;
+                        st.priority[0] = false;
                         ha.send("input_boolean.auto_compressor", false);
-                        ha.send("input_boolean.auto_lth_uth", false);
-                        esp.send("uth-relay1", false);
+                    }
+                }
+                if (state.esp[cfg.solar.espSunlight] >= cfg.solar.priority[1].onSun
+                    && st.voltsDC >= cfg.solar.priority[1].onVolts) {
+                    if (st.priority[1] == false || st.priority[1] == null) {
+                        log("Sun is high (" + state.esp[cfg.solar.espSunlight].toFixed(2) + "v) - starting priority 2 devices", index, 1);
+                        st.priority[1] = true;
+                        if (clientSensor("tank_lth_percent") > 15)
+                            setTimeout(() => { ha.send("input_boolean.auto_pump_transfer", true); }, 3e3);
+                    }
+                }
+                if (state.esp[cfg.solar.espSunlight] <= cfg.solar.priority[1].offSun
+                    || st.voltsDC <= cfg.solar.priority[1].offVolts) {
+                    if (st.priority[1] == true || st.priority[1] == null) {
+                        log("Sun is low (" + state.esp[cfg.solar.espSunlight].toFixed(2) + "v) - stopping priority 2 devices", index, 1);
+                        st.priority[1] = false;
+                        //    ha.send("input_boolean.auto_compressor", false);
+                        setTimeout(() => { ha.send("input_boolean.auto_pump_transfer", false); }, 2e3);
+                    }
+                }
+            }
+            function inverterAuto() {
+                if (st.inverter.state == null) {                // if inverter state is unknown
+                    if (state.esp[cfg.inverter[0].espSwitch] === true || state.esp[cfg.inverter[0].espSwitch] === false) {
+                        log("initializing inverter state - current state: " + state.esp[cfg.inverter[0].espSwitch], index, 1);
+                        log("Battery Voltage: " + st.voltsDC.toFixed(1), index, 1);
+                        st.inverter.state = state.esp[cfg.inverter[0].espSwitch];
+                        st.inverter.step = time.sec;
+                        if (state.ha[cfg.inverter[0].haAutomation] == true) log("inverter automation is on", index, 1);
+                        else log("inverter automation is off", index, 1);
+                    }
+                } else {                                        // if inverter state is known
+                    if (state.ha[cfg.inverter[0].haAutomation] == true) {
+                        if (st.inverter.state == true) {        // if inverter is already on
+                            if (st.voltsDC <= cfg.inverter[0].voltsStop) {   // when battery is low
+                                log("Battery is low: " + st.voltsDC.toFixed(1) + ", switching to grid ", index, 2);
+                                esp.send(cfg.esp[cfg.inverter[0].espSwitch], false)
+                                esp.send("battery-relay4", false);
+                                st.inverter.state = false;
+                            }
+                            if (state.ha[cfg.solar.haAutomation] == true && st.welder == false) solarAutomation(); // run whenever inverter auto is enabled
+                        } else {
+                            if (st.voltsDC >= cfg.inverter[0].voltsRun) {  // when battery begins to charge
+                                log("Battery is charging: " + st.voltsDC.toFixed(1) + ", switching to solar ", index, 2);
+                                esp.send(cfg.esp[cfg.inverter[0].espSwitch], true)
+                                esp.send("battery-relay4", true);
+                                st.inverter.state = true;
+                            }
+                        }
                     }
                 }
             }
@@ -117,9 +163,9 @@ let
                     if (st.welder == false) {
                         log("welder detected: " + state.esp[cfg.inverter[0].espPower].toFixed() + "w - shutting down all pumps", index, 2);
                         st.welder = true;
-                        st.pumper.priority1run = false;
+                        st.priority[0] = false;
                         ha.send("input_boolean.auto_compressor", false);
-                        ha.send("input_boolean.auto_lth_uth", false);
+                        ha.send("input_boolean.auto_pump_transfer", false);
                         //    esp.send("uth-relay1", false);
                         // turn on fan
                     }
@@ -127,35 +173,6 @@ let
                     if (st.welder == true && time.sec - st.welderStep >= cfg.inverter[0].welderTimeout) {
                         log("welder not detected: " + state.esp[cfg.inverter[0].espPower].toFixed() + "w", index, 1);
                         st.welder = false;
-                    }
-                }
-            }
-            function inverterAuto() {
-                if (st.inverter.state == null) {                // if inverter state is unknown
-                    if (state.esp[cfg.inverter[0].espSwitch] === true || state.esp[cfg.inverter[0].espSwitch] === false) {
-                        log("initializing inverter state - current state: " + state.esp[cfg.inverter[0].espSwitch], index, 1);
-                        log("Battery Voltage: " + state.esp[cfg.inverter[0].espVoltage].toFixed(1), index, 1);
-                        st.inverter.state = state.esp[cfg.inverter[0].espSwitch];
-                        st.inverter.step = time.sec;
-                        if (state.ha[cfg.inverter[0].haAutomation] == true) log("inverter automation is on", index, 1);
-                        else log("inverter automation is off", index, 1);
-                    }
-                } else {                                        // if inverter state is known
-                    if (state.ha[cfg.inverter[0].haAutomation] == true) {
-                        if (st.inverter.state == true) {        // if inverter is already on
-                            if (state.esp[cfg.inverter[0].espVoltage] <= cfg.inverter[0].voltsStop) {   // when battery is low
-                                log("Battery is low: " + state.esp[cfg.inverter[0].espVoltage].toFixed(1) + ", switching to grid ", index, 2);
-                                st.inverter.state = false;
-                                esp.send(cfg.esp[cfg.inverter[0].espSwitch], false)
-                            }
-                            if (state.ha[cfg.solar.haAutomation] == true && st.welder == false) solarAutomation(); // run whenever inverter auto is enabled
-                        } else {
-                            if (state.esp[cfg.inverter[0].espVoltage] >= cfg.inverter[0].voltsRun) {  // when battery begins to charge
-                                log("Battery is charging: " + state.esp[cfg.inverter[0].espVoltage].toFixed(1) + ", switching to solar ", index, 2);
-                                esp.send(cfg.esp[cfg.inverter[0].espSwitch], true)
-                                st.inverter.state = true;
-                            }
-                        }
                     }
                 }
             }
@@ -187,15 +204,78 @@ let
                 var day = clock.day, dow = clock.dow, hour = clock.hour, min = clock.min;
                 if (hour == 18 && min == 0) { }
             };
+            function init() {
+                state.auto.push({                                           // create object for this automation, 
+                    name: "Solar",                                          // give this automation a name 
+                    voltsDC: null,
+                    inverter: { state: null, step: time.sec },
+                    inverter2: { state: null, step: time.sec },
+                    grid: { state: null, step: time.sec },
+                    welder: false,
+                    welderStep: null,
+                    priority: [null, null],                                 // priority states
+                    sunlight: [],
+                });
+                setInterval(() => { automation[index](index); }, 1e3);      // set minimum rerun time, otherwise this automation function will only on ESP and HA events
+                emitters();
+                log("automation system started", index, 1);                 // log automation start with index number and severity 
+                send("sensor", { sensorReg: true });                        // register with core to receive sensor data
+            }
             function emitters() {
-                em.on(cfg.esp[cfg.inverter[0].espSwitch], (newState) => {
-                    log("inverter state changed in HA - new state: " + state.esp[cfg.inverter[0].espSwitch], index, 1);
+                em.on(cfg.esp[cfg.inverter[0].espSwitch], (newState) => {   // keep inverter state synced to automation state
+                    log("inverter 8kw state changed in HA - new state: " + state.esp[cfg.inverter[0].espSwitch], index, 1);
                     st.inverter.state = newState;
                 });
+                em.on(cfg.esp[4], (newState) => {
+                    log("inverter 10kw state changed in HA - new state: " + state.esp[4], index, 1);
+                    st.inverter2.state = newState;
+                });
+                em.on("input_boolean.auto_inverter", (newState) => {
+                    if (newState == true) {
+                        log("inverter auto going online", index, 1);
+                        esp.send(cfg.esp[cfg.inverter[0].espSwitch], true);
+                        esp.send("battery-relay4", true);
+                        st.inverter.state = true;
+                    } else {
+                        log("inverter auto going offline", index, 1);
+                        esp.send(cfg.esp[cfg.inverter[0].espSwitch], false);
+                        esp.send("battery-relay4", false);
+                        st.inverter.state = false;
+                    }
+                });
+                em.on("input_boolean.auto_solar", (newState) => {
+                    if (newState == true) log("solar automation going online", index, 1);
+                    else {
+                        log("inverter auto going offline", index, 1);
+                        st.priority[0] = false;
+                    }
+                });
+            }
+            function clientSensor(name) {
+                for (let x = 0; x < state.sensor.length; x++)
+                    if (state.sensor[x].name == name)
+                        return state.sensor[x].value;
+            }
+            function calcSolarPower() {
+                if (st.sunlight[sunConverted] == undefined) {
+                    //   log("creating new solar power index: " + sunConverted, index, 1);
+                    st.sunlight[sunConverted] = { low: solarPower, high: solarPower, average: null };
+                } else {
+                    if (solarPower < st.sunlight[sunConverted].low) {
+                        st.sunlight[sunConverted].low = solarPower;
+                        st.sunlight[sunConverted].average = Math.round(st.sunlight[sunConverted].low + st.sunlight[sunConverted].high / 2);
+                        //     log("solar power index: " + sunConverted + "  low is being updated: " + solarPower + "  new average: " + st.sunlight[sunConverted].average, index, 1);
+                    }
+                    if (solarPower > st.sunlight[sunConverted].high) {
+                        st.sunlight[sunConverted].high = solarPower;
+                        st.sunlight[sunConverted].average = Math.round(st.sunlight[sunConverted].low + st.sunlight[sunConverted].high / 2);
+                        //    log("solar power index: " + sunConverted + "  high is being updated: " + solarPower + "  new average: " + st.sunlight[sunConverted].average, index, 1);
+                    }
+                }
             }
         }
     ];
-let
+    let
     user = {        // user configurable block - Telegram 
         telegram: { // enter a case matching your desireable input
             agent: function (msg) {
@@ -312,7 +392,7 @@ let
                             }
                             break;
                         case "diag":                // incoming diag refresh request, then reply object
-                            send("diag", { state: state, nv: nv, test: "test" });
+                            send("diag", { state: state, nv: nv });
                             break;
                         case "telegram":
                             switch (buf.obj.class) {
@@ -379,10 +459,13 @@ let
                 log("installing TW-Client-" + cfg.moduleName + " service...");
                 let service = [
                     "[Unit]",
-                    "Description=\n",
+                    "Description=",
+                    "After=network-online.target",
+                    "Wants=network-online.target\n",
                     "[Install]",
                     "WantedBy=multi-user.target\n",
                     "[Service]",
+                    "ExecStartPre=/bin/bash -c 'uptime=$(awk \\'{print int($1)}\\' /proc/uptime); if [ $uptime -lt 300 ]; then sleep 70; fi'",
                     "ExecStart=nodemon " + cfg.workingDir + "client-" + moduleName + ".js -w " + cfg.workingDir + "client-" + moduleName + ".js --exitcrash",
                     "Type=simple",
                     "User=root",
