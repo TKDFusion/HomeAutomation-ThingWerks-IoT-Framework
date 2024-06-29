@@ -275,7 +275,7 @@ let
             }
         }
     ];
-    let
+let
     user = {        // user configurable block - Telegram 
         telegram: { // enter a case matching your desireable input
             agent: function (msg) {
@@ -436,7 +436,12 @@ let
                     this.min = Math.floor(Date.now() / 1000 / 60);
                 }
             };
-            esp = { send: function (name, state) { send("espState", { name: name, state: state }) } };
+            esp = {
+                send: function (name, state) {
+                    if (isFinite(Number(name)) == true) send("espState", { name: cfg.esp[name], state: state })
+                    else send("espState", { name: name, state: state })
+                }
+            };
             ha = {
                 getEntities: function () { send("haQuery") },
                 send: function (name, state, unit, id) {  // if ID is not expressed for sensor, then sensor data will be send to HA system 0
