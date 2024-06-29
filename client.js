@@ -1,57 +1,3 @@
-#!/usr/bin/node
-let
-    cfg = {
-        moduleName: "NewClientModule",      // give this NodeJS Client a name for notification
-        telegram: {                         // delete this object if you don't use Tekegram
-            password: "password",           // password for telegram registration
-        },
-        ha: [                               // add all your home assistant entities here
-            "myHaEntity",                   // this index order is used for incoming state events and output calls as well (ie state.ha[0] etc...)
-        ],
-        esp: [                              // add all your ESP entities here
-            "myEspEntity",                  // this index order is used for incoming state events and output calls as well (ie state.esp[0] etc...)
-        ]
-    },
-    automation = [                                                          // create an (index, clock) => {},  array member function for each automation you want to create
-        (index, clock) => {
-            if (!state.auto[index]) {         // this block gets run once
-                state.auto.push({                                           // create object for this automation, 
-                    name: "Auto-System",                                    // give it a name and 
-                    fan: { started: false, step: time.sec, ha: {} }         // create an object for each of this automation's devices or features     
-                });
-                setInterval(() => { automation[index](index); }, 1e3);      // set minimum rerun time, otherwise this automation function will only on ESP and HA events
-                log("system started", index, 1);                            // log automation start with index number and severity 
-                em.on("state" + "input_button.test", () => button.test());  // create an event emitter for HA or ESP entities that call a member function when data is received
-                send("sensor", { sensorReg: true });                        // register with core to receive sensor data from other clients that are sending sensor data 
-            }
-            let st = state.auto[index];                                     // set automation state object's shorthand name to "st" (state) 
-            st.fan.ha = {                                                   // assign relevant HA entities for this device 
-                state: state.ha[3], auto: state.ha[2]                       // assign relevant HA helper entities
-                , timeOn: state.ha[0], timeOff: state.ha[1]
-            }
-            let button = {
-                test: function () {                                         // example object member function called by emitter
-                    ha.send("switch.fan_exhaust_switch", false);
-                    ha.send("input_boolean.fan_auto", true);
-                    ha.send("switch.fan_bed_switch", false);
-                    ha.send(0, false);                                      // you can call by the entity number as listed in the order in cfg.ha
-                    ha.send(2, true);                                       // or you can call my the entity's ID name as listed in Home Assistant
-                    ha.send(3, false);
-                }
-            };
-            if (clock) {                                                    
-                var day = clock.day, dow = clock.dow, hour = clock.hour, min = clock.min;
-                if (hour == 18 && min == 0) {
-                    log("turning on outside lights");
-                    ha.send("switch.light_outside_switch", true);
-                }
-                if (hour == 22 && min == 0) {
-                    log("turning off outside lights");
-                    ha.send("switch.light_outside_switch", false);
-                }
-            };
-        }
-    ];
 let
     user = {        // user configurable block - Telegram 
         telegram: { // enter a case matching your desireable input
@@ -169,7 +115,7 @@ let
                             }
                             break;
                         case "diag":                // incoming diag refresh request, then reply object
-                            send("diag", { state: state, nv: nv, test: "test" });
+                            send("diag", { state: state, nv: nv });
                             break;
                         case "telegram":
                             switch (buf.obj.class) {
@@ -236,10 +182,13 @@ let
                 log("installing TW-Client-" + cfg.moduleName + " service...");
                 let service = [
                     "[Unit]",
-                    "Description=\n",
+                    "Description=",
+                    "After=network-online.target",
+                    "Wants=network-online.target\n",
                     "[Install]",
                     "WantedBy=multi-user.target\n",
                     "[Service]",
+                    "ExecStartPre=/bin/bash -c 'uptime=$(awk \\'{print int($1)}\\' /proc/uptime); if [ $uptime -lt 300 ]; then sleep 70; fi'",
                     "ExecStart=nodemon " + cfg.workingDir + "client-" + moduleName + ".js -w " + cfg.workingDir + "client-" + moduleName + ".js --exitcrash",
                     "Type=simple",
                     "User=root",
@@ -380,4 +329,3 @@ function log(message, index, level) {
     if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
     else send("log", { message: message, mod: state.auto[index].name, level: level });
 }
-
