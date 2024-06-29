@@ -290,7 +290,7 @@ if (isMainThread) {
                                     haNum = y;
                                     sensor = false;
                                     break;
-                                } else {
+                                } else {        // identify HA num even if no match
                                     if (z == logs.haInputs[y].length - 1 && buf.obj.ip == cfg.homeAssistant[y].address) {
                                         haNum = y;
                                         sensor = true;
@@ -391,7 +391,7 @@ if (isMainThread) {
                     case "diag":        // incoming UDP client Diag
                         //console.log(buf)
                         // console.log(buf.obj);
-                        let diagBuf = { auto: [], ha: [], esp: [] };
+                        let diagBuf = { auto: [], ha: [], esp: [], sensor: [] };
                         if (buf.obj.state.ha)
                             for (let x = 0; x < buf.obj.state.ha.length; x++) {
                                 diagBuf.ha.push({ name: state.udp[id].ha[x], state: buf.obj.state.ha[x] });
@@ -402,6 +402,11 @@ if (isMainThread) {
                             }
                         for (let x = 0; x < buf.obj.state.auto.length; x++) {
                             diagBuf.auto.push(buf.obj.state.auto[x]);
+                        }
+                        if (buf.obj.state.sensor) {
+                            for (let x = 0; x < buf.obj.state.sensor.length; x++) {
+                                diagBuf.sensor.push(buf.obj.state.sensor[x]);
+                            }
                         }
                         diag[id] = { name: state.udp[id].name, ip: state.udp[id].ip, state: diagBuf, nv: buf.obj.nv }
                         break;
@@ -833,11 +838,16 @@ if (isMainThread) {
                     log("installing ThingWerks-Core service...");
                     let service = [
                         "[Unit]",
-                        "Description=\n",
+                        "Description=",
+                        "After=network-online.target",
+                        "Wants=network-online.target\n",
                         "[Install]",
                         "WantedBy=multi-user.target\n",
                         "[Service]",
+                        "ExecStartPre=/bin/bash -c 'uptime=$(awk \\'{print int($1)}\\' /proc/uptime); if [ $uptime -lt 300 ]; then sleep 45; fi'",
+                        "ExecStartPre=mv /apps/log-tw-core.txt /apps/log-tw-core-last.txt",
                         "ExecStart=nodemon " + cfg.workingDir + "core.js -w " + cfg.workingDir + "core.js --exitcrash",
+                        "StandardOutput=file:/apps/log-tw-core.txt",
                         "Type=simple",
                         "User=root",
                         "Group=root",
@@ -853,7 +863,16 @@ if (isMainThread) {
                     execSync("systemctl start tw-core");
                     execSync("service tw-core status");
                     log("service installed and started");
-                    console.log("type: journalctl -f -u tw-core");
+                    console.log("type:  journalctl -f -u tw-core  or  tail -f /apps/log-tw-core.txt -n 500");
+                    process.exit();
+                }
+                if (process.argv[2] == "-u") {
+                    moduleName = cfg.moduleName.toLowerCase();
+                    log("uninstalling TW-Core service...");
+                    execSync("systemctl stop tw-core");
+                    execSync("systemctl disable tw-core.service");
+                    fs.unlinkSync("/etc/systemd/system/tw-core.service");
+                    console.log("TW-Core service uninstalled");
                     process.exit();
                 }
             },
@@ -1004,13 +1023,14 @@ if (!isMainThread) {
         }
         function reset() {
             em.removeAllListeners();                                                // remove all event listeners 
-            try { client.disconnect(); } catch (err) { log("ESP disconnect failed...", 2); }   // disconnect every client 
+            // try { client.disconnect(); } catch (err) { log("ESP disconnect failed...", 2); }   // disconnect every client 
+            client.disconnect();   // disconnect every client 
             client = null;                                           // delete all client objects 
             setTimeout(() => { espInit(); }, 1000);                                  // reconnect to every device
         }
         parentPort.on('message', (data) => {
             //   console.log(data.obj);
-            //     log("incominig esp state request Data: " + data.obj, 2, 0);
+            //     log("incoming esp state request Data: " + data.obj, 2, 0);
             switch (data.type) {
                 case "config":
                     cfg = data.obj;
