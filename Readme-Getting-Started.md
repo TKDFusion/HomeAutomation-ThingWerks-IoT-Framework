@@ -5,8 +5,8 @@
    * https://community.home-assistant.io/t/how-to-get-long-lived-access-token/162159
   
 ### Prepare Files & Environment
-1) Create Application directory and change directory to it
-   * in this example we will use /apps/tw
+1) Create /apps/tw Application directory and change to this directory
+   * the tw-core has some dependencies to useing the /apps/tw directory
 2) Install NodeJS (preferably v20) and necessary NPM packages
    * npm install express
    * npm install websocket
@@ -14,7 +14,7 @@
    * npm install @2colors/esphome-native-api
    * npm install node-telegram-bot-api
    * npm install homeassistant
-4) Download tw-core.js, tw-client.js and config example and place into your app directory
+4) Download tw-core.js, tw-client-example.js and config example and place into your app directory
 
 ### Setup configurations for TW-Core and first run
 1) Modify the config-example.js and save as/rename to config.json, it must go in the same directory at th-core.js
