@@ -1,3 +1,63 @@
+#!/usr/bin/node
+let
+    cfg = {
+        moduleName: "NewClientModule",      // give this NodeJS Client a name for notification
+        telegram: {                         // delete this object if you don't use Telegram
+            password: "password",           // password for telegram registration
+        },
+        ha: [                               // add all your home assistant entities here
+            "myHaEntity",                   // this index order is used for incoming state events and output calls as well (ie state.ha[0] etc...)
+        ],
+        esp: [                              // add all your ESP entities here
+            "myEspEntity",                  // this index order is used for incoming state events and output calls as well (ie state.esp[0] etc...)
+        ]
+    },
+    automation = [                                                          // create an (index, clock) => {},  array member function for each automation you want to create
+        (index, clock) => {
+            if (!state.auto[index]) {                                       // initialize automation
+                state.auto.push({                                           // create object for this automation in local state
+                    name: "Auto-System",                                    // give this automation a name 
+                    example: { started: false, step: time.sec }             // initialize an object for each of this automation's devices or features     
+                });
+                setInterval(() => { automation[index](index); }, 1e3);      // set minimum rerun time, otherwise this automation function will only on ESP and HA push updates / events
+                log("system started", index, 1);                            // log automation start with index number and severity 
+                em.on("state" + "input_button.test", () => button.test());  // create an event emitter for HA or ESP entities that call a member function when data is received
+                send("sensor", { sensorReg: true });                        // register with core to receive sensor data from other clients that are sending sensor data 
+            }
+            let st = state.auto[index];                                     // set automation state object's shorthand name to "st" (state) 
+
+            let button = {
+                test: function () {                                         // example object member function called by emitter
+                    ha.send("switch.fan_exhaust_switch", false);
+                    ha.send("input_boolean.fan_auto", true);
+                    ha.send("switch.fan_bed_switch", false);
+                    ha.send(0, false);                                      // you can call by the entity number as listed in the order in cfg.ha
+                    ha.send(2, true);                                       // or you can call my the entity's ID name as listed in Home Assistant
+                    ha.send(3, false);
+                    esp.send("myEspEntity", true);                          // call esp device by name or cfg.esp array element number
+                    esp.send(0, true);
+                }
+            };
+
+            if (state.esp[0] == true && st.example.started == false) {      // compare an ESPHome entity with a value in your program - do something
+                log("turning off outside lights", index, 1);                // log must contain "index" followed by logging level: 0 debug, 1 event, 2 warning, 3 errpr    
+                st.example.step = time.sec;                                 // record time of now, time.sec and time.min are unix epoch time in seconds or minutes
+                st.example.started = true;                                  // set automation state variable
+            }
+
+            if (clock) {                                                    // set events to run at a specific time using clock function. match hour and minute of day, etc
+                var day = clock.day, dow = clock.dow, hour = clock.hour, min = clock.min;
+                if (hour == 18 && min == 0) {
+                    log("turning on outside lights", index, 1);
+                    ha.send("switch.light_outside_switch", true);
+                }
+                if (hour == 22 && min == 0) {
+                    log("turning off outside lights", index, 1);
+                    ha.send("switch.light_outside_switch", false);
+                }
+            };
+        }
+    ];
 let
     user = {        // user configurable block - Telegram 
         telegram: { // enter a case matching your desireable input
