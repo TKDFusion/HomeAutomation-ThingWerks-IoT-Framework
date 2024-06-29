@@ -110,7 +110,7 @@ let
             },
         },
     },
-    sys = {
+    sys = {         // system area, don't need to touch anything below this line
         com: function () {
             udp.on('message', function (data, info) {
                 time.sync();   // sync the time.  time.sec time.min are global vars containing epoch time  
