@@ -357,30 +357,35 @@ if (isMainThread) {
                             state.telegram.port = info.port;
                         }
                         break;
-                    case "sensor":      // incoming sensor state from clients
+                    case "coreData":      // incoming sensor state from clients
                         let exist = false;
-                        if (buf.obj.sensorReg == true) {
-                            log("Client : " + state.udp[id].name == undefined ? id : state.udp[id].name + " is registering for sensor updates", 3, 1);
-                            state.udp[id].sensorReg = true;
+                        if (buf.obj.register == true) {
+                            log("Client : " + state.udp[id].name == undefined ? id : state.udp[id].name + " is registering for CoreData updates", 3, 1);
+                            if (state.udp[id].coreData == undefined) state.udp[id].coreData = [];
+                            state.udp[id].coreData.push(buf.obj.name)
                         } else {
-                            for (let x = 0; x < state.sensor.length; x++) {
-                                if (state.sensor[x].name == buf.obj.name) {      // a client is sending sensor data for the first time
-                                    state.sensor[x].value = buf.obj.value;
-                                    state.sensor[x].unit = buf.obj.unit;
+                            for (let x = 0; x < state.coreData.length; x++) {
+                                if (state.coreData[x].name == buf.obj.name) {    
+                                    state.coreData[x].data = buf.obj.data;
                                     exist = true;
                                     break;
                                 }
                             }
-                            if (exist == false) {
-                                log("Client: " + (state.udp[id].name == undefined ? id : state.udp[id].name) + " - is registering sensor: " + buf.obj.name, 3, 1);
-                                state.sensor.push({ name: buf.obj.name, value: buf.obj.value, unit: buf.obj.unit }) - 1;
+                            if (exist == false) {     // a client is sending sensor data for the first time
+                                log("Client: " + (state.udp[id].name == undefined ? id : state.udp[id].name) + " - is populating CoreData: " + buf.obj.name, 3, 1);
+                                state.coreData.push({ name: buf.obj.name, data: buf.obj.data });
                             }
                             for (let x = 0; x < state.udp.length; x++) {
-                                if (state.udp[x].sensorReg == true) {
-                                    udp.send(JSON.stringify({
-                                        type: "sensor",
-                                        obj: { name: buf.obj.name, value: buf.obj.value, unit: buf.obj.unit }
-                                    }), state.udp[x].port);
+                                if (state.udp[x].coreData != undefined) {
+                                    for (let y = 0; y < state.udp[x].coreData.length; y++) {
+                                        if (state.udp[x].coreData[y] == buf.obj.name) {
+                                            //    log("sending coreData: " + buf.obj.name + "  to client: " + x, 3, 0);
+                                            udp.send(JSON.stringify({
+                                                type: "coreData",
+                                                obj: { name: buf.obj.name, data: buf.obj.data, }
+                                            }), state.udp[x].port);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -391,7 +396,7 @@ if (isMainThread) {
                     case "diag":        // incoming UDP client Diag
                         //console.log(buf)
                         // console.log(buf.obj);
-                        let diagBuf = { auto: [], ha: [], esp: [], sensor: [] };
+                        let diagBuf = { auto: [], ha: [], esp: [], coreData: [] };
                         if (buf.obj.state.ha)
                             for (let x = 0; x < buf.obj.state.ha.length; x++) {
                                 diagBuf.ha.push({ name: state.udp[id].ha[x], state: buf.obj.state.ha[x] });
@@ -403,9 +408,9 @@ if (isMainThread) {
                         for (let x = 0; x < buf.obj.state.auto.length; x++) {
                             diagBuf.auto.push(buf.obj.state.auto[x]);
                         }
-                        if (buf.obj.state.sensor) {
-                            for (let x = 0; x < buf.obj.state.sensor.length; x++) {
-                                diagBuf.sensor.push(buf.obj.state.sensor[x]);
+                        if (buf.obj.state.coreData) {
+                            for (let x = 0; x < buf.obj.state.coreData.length; x++) {
+                                diagBuf.coreData.push(buf.obj.state.coreData[x]);
                             }
                         }
                         diag[id] = { name: state.udp[id].name, ip: state.udp[id].ip, state: diagBuf, nv: buf.obj.nv }
@@ -579,7 +584,7 @@ if (isMainThread) {
                                         .catch(err => { log("fetching failed", 0, 2); });
                                 }
                             });
-                            express.get("/diag", function (request, response) {
+                            express.get("/client", function (request, response) {
                                 for (let x = 0; x < state.udp.length; x++) {
                                     udp.send(JSON.stringify({ type: "diag" }), state.udp[x].port);
                                 }
@@ -679,7 +684,7 @@ if (isMainThread) {
                 }
             },
             init: function () { // initialize system volatile memory
-                state = { udp: [], ha: [], esp: [], perf: { ha: [] }, sensor: [] };
+                state = { udp: [], ha: [], esp: [], perf: { ha: [] }, coreData: [] };
                 diag = [];      // array for each UDP client diag
                 ws = [];
                 hass = [];
@@ -867,7 +872,6 @@ if (isMainThread) {
                     process.exit();
                 }
                 if (process.argv[2] == "-u") {
-                    moduleName = cfg.moduleName.toLowerCase();
                     log("uninstalling TW-Core service...");
                     execSync("systemctl stop tw-core");
                     execSync("systemctl disable tw-core.service");
