@@ -22,25 +22,30 @@ let
                 setInterval(() => { automation[index](index); }, 1e3);      // set minimum rerun time, otherwise this automation function will only on ESP and HA push updates / events
                 log("system started", index, 1);                            // log automation start with index number and severity 
                 em.on("state" + "input_button.test", () => button.test());  // create an event emitter for HA or ESP entities that call a member function when data is received
-                send("sensor", { sensorReg: true });                        // register with core to receive sensor data from other clients that are sending sensor data 
+                send("coreData", { register: true, name: "myObject" });     // register with core to receive data from other client
             }
             let st = state.auto[index];                                     // set automation state object's shorthand name to "st" (state) 
 
             let button = {
                 test: function () {                                         // example object member function called by emitter
-                    ha.send("switch.fan_exhaust_switch", false);
+                    ha.send("switch.fan_exhaust_switch", false);            // different methods to set state of HA and ESP entities
                     ha.send("input_boolean.fan_auto", true);
                     ha.send("switch.fan_bed_switch", false);
                     ha.send(0, false);                                      // you can call by the entity number as listed in the order in cfg.ha
-                    ha.send(2, true);                                       // or you can call my the entity's ID name as listed in Home Assistant
-                    ha.send(3, false);
+                    ha.send(2, true);                                       // or you can call my the entity's ID name as listed in Home Assistant entity list
                     esp.send("myEspEntity", true);                          // call esp device by name or cfg.esp array element number
                     esp.send(0, true);
+                    ha.send("volts_dc_Battery", parseFloat(st.voltsDC).toFixed(2), "v");    // send my sensor data to HA. your sensor name, value, unit of your choice
+                    // first time data is sent, HA will create this sensor, find in entities list
+                    send("coreData", { name: "myObjectName", data: { myData: "myDataOrObject" } });  // send a variable to the Core for other clients to access
                 }
             };
 
+            if (coreData("mySharedData").myData == "myValue")               // compare a variable from another TW Client using coreData (after register with coreData shown above), coreData returns "data" variable or object
+                log("sensor on other client is a match", index, 1);         // see list of variables in coreData in  127.0.0.1:20000/diag client/state/coreData (use firefox)
+
             if (state.esp[0] == true && st.example.started == false) {      // compare an ESPHome entity with a value in your program - do something
-                log("turning off outside lights", index, 1);                // log must contain "index" followed by logging level: 0 debug, 1 event, 2 warning, 3 errpr    
+                log("turning off outside lights", index, 1);                // log must contain "index" followed by logging level: 0 debug, 1 event, 2 warning, 3 error    
                 st.example.step = time.sec;                                 // record time of now, time.sec and time.min are unix epoch time in seconds or minutes
                 st.example.started = true;                                  // set automation state variable
             }
@@ -56,6 +61,17 @@ let
                     ha.send("switch.light_outside_switch", false);
                 }
             };
+            /*
+                ---Debugging web server---
+                http:/127.0.0.1:20000/client --show all client volatile and non-volatile memory
+                http:/127.0.0.1:20000/ha ------show all entities available from Home Assistant
+                http:/127.0.0.1:20000/esp -----show all discovered ESP Home modules
+                http:/127.0.0.1:20000/tg ------last 100 received Telegram messages
+                http:/127.0.0.1:20000/nv ------show all core non-volatile memory
+                http:/127.0.0.1:20000/state ---show all core volatile memory
+                http:/127.0.0.1:20000/cfg -----show all core hard coded configuration
+                http:/127.0.0.1:20000/log -----last 500 log messages
+         */
         }
     ];
 let
@@ -158,20 +174,19 @@ let
                                 if (cfg.ha != undefined) { send("haFetch"); }
                             }, 1e3);
                             break;
-                        case "sensor":
+                        case "coreData":
                             exist = false;
-                            sensorNum = null;
-                            for (let x = 0; x < state.sensor.length; x++) {
-                                if (state.sensor[x].name == buf.obj.name) {      // a client is sending sensor data for the first time
-                                    state.sensor[x].value = buf.obj.value;
-                                    state.sensor[x].unit = buf.obj.unit;
+                            coreDataNum = null;
+                            for (let x = 0; x < state.coreData.length; x++) {
+                                if (state.coreData[x].name == buf.obj.name) {      // a client is sending coreData for the first time
+                                    state.coreData[x].data = buf.obj.data;
                                     exist = true;
                                     break;
                                 }
                             }
                             if (exist == false) {
-                                sensorNum = state.sensor.push({ name: buf.obj.name, value: buf.obj.value, unit: buf.obj.unit }) - 1;
-                                log("sensor:" + sensorNum + " - is registering: " + buf.obj.name + " - " + buf.obj.value + " " + buf.obj.unit);
+                                coreDataNum = state.coreData.push({ name: buf.obj.name, data: buf.obj.data }) - 1;
+                                log("coreData:" + coreDataNum + " - is registering: " + buf.obj.name + " - " + buf.obj.data);
                             }
                             break;
                         case "diag":                // incoming diag refresh request, then reply object
@@ -211,7 +226,7 @@ let
         },
         init: function () {
             nv = {};
-            state = { auto: [], ha: [], esp: [], sensor: [], onlineHA: false, onlineESP: false, online: false };
+            state = { auto: [], ha: [], esp: [], coreData: [], onlineHA: false, onlineESP: false, online: false };
             time = {
                 sec: null, min: null,
                 sync: function () {
@@ -385,6 +400,9 @@ let
 setTimeout(() => { sys.init(); }, 1e3);
 function bot(id, data, obj) { send("telegram", { class: "send", id: id, data: data, obj: obj }) }
 function send(type, obj, name) { udp.send(JSON.stringify({ type: type, obj: obj, name: name }), 65432, '127.0.0.1') }
+function coreData(name) {
+    for (let x = 0; x < state.coreData.length; x++) if (state.coreData[x].name == name) return state.coreData[x].data;
+}
 function log(message, index, level) {
     if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
     else send("log", { message: message, mod: state.auto[index].name, level: level });
