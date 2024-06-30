@@ -637,9 +637,16 @@ let
                     sendHA(press.cfg.name + "_percent", press.out.percent.toFixed(0), '%');
                     sendHA(press.cfg.name + "_meters", press.out.meters.toFixed(2), 'm');
                     sendHA(press.cfg.name + "_psi", press.out.psi.toFixed(0), 'psi');
-                    send("sensor", { name: press.cfg.name + "_percent", value: press.out.percent.toFixed(0), unit: '%' });
-                    send("sensor", { name: press.cfg.name + "_meters", value: press.out.meters.toFixed(2), unit: 'm' });
-                    send("sensor", { name: press.cfg.name + "_psi", value: press.out.psi.toFixed(0), unit: 'psi' });
+                    send("coreData", {
+                        name: press.cfg.name, data: {
+                            percent: press.out.percent.toFixed(0),
+                            meters: press.out.meters.toFixed(2),
+                            psi: press.out.psi.toFixed(0)
+                        }
+                    });
+                    //    send("coreData", { name: press.cfg.name + "_percent", data: press.out.percent.toFixed(0) });
+                    //  send("coreData", { name: press.cfg.name + "_meters", data: press.out.meters.toFixed(2) });
+                    //    send("coreData", { name: press.cfg.name + "_psi", data: press.out.psi.toFixed(0) });
                 }
                 function sendHA(name, value, unit) { setTimeout(() => { ha.send(name, value, unit) }, sendDelay); sendDelay += 25; };
             }
@@ -694,7 +701,7 @@ let
             }
         },
     ];
-    let
+let
     user = {        // user configurable block - Telegram 
         telegram: { // enter a case matching your desireable input
             agent: function (msg) {
@@ -746,7 +753,7 @@ let
             },
         },
     },
-    sys = {
+    sys = {         // system area, don't need to touch anything below this line
         com: function () {
             udp.on('message', function (data, info) {
                 time.sync();   // sync the time.  time.sec time.min are global vars containing epoch time  
@@ -794,20 +801,19 @@ let
                                 if (cfg.ha != undefined) { send("haFetch"); }
                             }, 1e3);
                             break;
-                        case "sensor":
+                        case "coreData":
                             exist = false;
-                            sensorNum = null;
-                            for (let x = 0; x < state.sensor.length; x++) {
-                                if (state.sensor[x].name == buf.obj.name) {      // a client is sending sensor data for the first time
-                                    state.sensor[x].value = buf.obj.value;
-                                    state.sensor[x].unit = buf.obj.unit;
+                            coreDataNum = null;
+                            for (let x = 0; x < state.coreData.length; x++) {
+                                if (state.coreData[x].name == buf.obj.name) {      // a client is sending coreData for the first time
+                                    state.coreData[x].data = buf.obj.data;
                                     exist = true;
                                     break;
                                 }
                             }
                             if (exist == false) {
-                                sensorNum = state.sensor.push({ name: buf.obj.name, value: buf.obj.value, unit: buf.obj.unit }) - 1;
-                                log("sensor:" + sensorNum + " - is registering: " + buf.obj.name + " - " + buf.obj.value + " " + buf.obj.unit);
+                                coreDataNum = state.coreData.push({ name: buf.obj.name, data: buf.obj.data }) - 1;
+                                log("coreData:" + coreDataNum + " - is registering: " + buf.obj.name + " - " + buf.obj.data);
                             }
                             break;
                         case "diag":                // incoming diag refresh request, then reply object
@@ -847,7 +853,7 @@ let
         },
         init: function () {
             nv = {};
-            state = { auto: [], ha: [], esp: [], sensor: [], onlineHA: false, onlineESP: false, online: false };
+            state = { auto: [], ha: [], esp: [], coreData: [], onlineHA: false, onlineESP: false, online: false };
             time = {
                 sec: null, min: null,
                 sync: function () {
@@ -855,12 +861,7 @@ let
                     this.min = Math.floor(Date.now() / 1000 / 60);
                 }
             };
-            esp = {
-                send: function (name, state) {
-                    if (isFinite(Number(name)) == true) send("espState", { name: cfg.esp[name], state: state })
-                    else send("espState", { name: name, state: state })
-                }
-            };
+            esp = { send: function (name, state) { send("espState", { name: name, state: state }) } };
             ha = {
                 getEntities: function () { send("haQuery") },
                 send: function (name, state, unit, id) {  // if ID is not expressed for sensor, then sensor data will be send to HA system 0
@@ -1026,6 +1027,9 @@ let
 setTimeout(() => { sys.init(); }, 1e3);
 function bot(id, data, obj) { send("telegram", { class: "send", id: id, data: data, obj: obj }) }
 function send(type, obj, name) { udp.send(JSON.stringify({ type: type, obj: obj, name: name }), 65432, '127.0.0.1') }
+function coreData(name) {
+    for (let x = 0; x < state.coreData.length; x++) if (state.coreData[x].name == name) return state.coreData[x].data;
+}
 function log(message, index, level) {
     if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
     else send("log", { message: message, mod: state.auto[index].name, level: level });
