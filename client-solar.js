@@ -81,7 +81,6 @@ let
             if battery is very low, turn off all pumps
             */
             function solarAutomation() {
-                console.log(coreData("tank_lth").percent)
                 if (state.esp[cfg.solar.espSunlight] >= cfg.solar.priority[0].onSun
                     && st.voltsDC >= cfg.solar.priority[0].onVolts) {
                     if (st.priority[0] == false || st.priority[0] == null) {
@@ -106,6 +105,7 @@ let
                         if (coreData("tank_lth").percent > 15)
                             setTimeout(() => { ha.send("input_boolean.auto_pump_transfer", true); }, 3e3);
                     }
+
                 }
                 if (state.esp[cfg.solar.espSunlight] <= cfg.solar.priority[1].offSun
                     || st.voltsDC <= cfg.solar.priority[1].offVolts) {
@@ -598,6 +598,7 @@ function bot(id, data, obj) { send("telegram", { class: "send", id: id, data: da
 function send(type, obj, name) { udp.send(JSON.stringify({ type: type, obj: obj, name: name }), 65432, '127.0.0.1') }
 function coreData(name) {
     for (let x = 0; x < state.coreData.length; x++) if (state.coreData[x].name == name) return state.coreData[x].data;
+    return null;
 }
 function log(message, index, level) {
     if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
