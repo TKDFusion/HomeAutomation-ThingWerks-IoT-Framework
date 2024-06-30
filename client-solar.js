@@ -16,21 +16,21 @@ let
             "battery-voltage",
             "power1-relay1",
             "power1-relay2",
-            "power1-relay3",    // inverter 8kw
-            "power1-relay4",    // inverter 10kw
-            "8kw-power",        // 8kw// inverter 8.2kw watts
-            "8kw-energy",       // 8kw energy
-            "grid-voltage",      // grid voltage
-            "grid-power",        // grid watts
-            "grid-energy",       // grid kwh
+            "power1-relay3",        // inverter 8kw
+            "power1-relay4",        // inverter 10kw
+            "8kw-power",            // 8kw watts
+            "8kw-energy",           // 8kw energy
+            "grid-voltage",         // grid voltage
+            "grid-power",           // grid watts
+            "grid-energy",          // grid kwh
             "sunlight",
             "temp-battery-room",
-            "lth-relay1",       // compressor
-            "uth-relay1",       // 1/2hp pump
-            "10kw-power",        // 10kw watts
-            "10kw-energy",       // 10kw watts
-            "battery-power",    // battery amps
-            "battery-energy",    // battery amps
+            "lth-relay1",           // compressor
+            "uth-relay1",           // 1/2hp pump
+            "10kw-power",           // 10kw watts
+            "10kw-energy",          // 10kw watts
+            "battery-power",        // battery amps
+            "battery-energy",       // battery amps
             "battery-voltage2",
         ],
         grid: {
@@ -80,15 +80,8 @@ let
 
             if battery is very low, turn off all pumps
             */
-            function calcVoltsDC() {
-                let sunConverted = (state.esp[10] * 100).toFixed(0);
-                let solarPower = Math.round(state.esp[16] + state.esp[14] + state.esp[4]);
-                //   if (st.sunlight[state.esp[10]].high == undefined) 
-                ha.send("solar_power", Math.round(solarPower), "w");
-                st.voltsDC = state.esp[cfg.inverter[0].espVoltage] * cfg.inverter[0].voltsFactor;
-                ha.send("volts_dc_Battery", parseFloat(st.voltsDC).toFixed(2), "v");
-            }
             function solarAutomation() {
+                console.log(coreData("tank_lth").percent)
                 if (state.esp[cfg.solar.espSunlight] >= cfg.solar.priority[0].onSun
                     && st.voltsDC >= cfg.solar.priority[0].onVolts) {
                     if (st.priority[0] == false || st.priority[0] == null) {
@@ -110,7 +103,7 @@ let
                     if (st.priority[1] == false || st.priority[1] == null) {
                         log("Sun is high (" + state.esp[cfg.solar.espSunlight].toFixed(2) + "v) - starting priority 2 devices", index, 1);
                         st.priority[1] = true;
-                        if (clientSensor("tank_lth_percent") > 15)
+                        if (coreData("tank_lth").percent > 15)
                             setTimeout(() => { ha.send("input_boolean.auto_pump_transfer", true); }, 3e3);
                     }
                 }
@@ -155,6 +148,14 @@ let
                     }
                 }
             }
+            function calcVoltsDC() {
+                let sunConverted = (state.esp[10] * 100).toFixed(0);
+                let solarPower = Math.round(state.esp[16] + state.esp[14] + state.esp[5]);
+                //   if (st.sunlight[state.esp[10]].high == undefined) 
+                ha.send("solar_power", Math.round(solarPower), "W");
+                st.voltsDC = state.esp[cfg.inverter[0].espVoltage] * cfg.inverter[0].voltsFactor;
+                ha.send("volts_dc_Battery", parseFloat(st.voltsDC).toFixed(2), "V");
+            }
             function welderDetection() {
                 if (state.esp[cfg.inverter[0].espPower] >= cfg.inverter[0].welderWatts ||  // check inverter meter
                     state.esp[cfg.grid.espPower] >= cfg.inverter[0].welderWatts) {           // check grid meter
@@ -181,12 +182,12 @@ let
                         log("grid blackout", index, 2);
                         st.grid.state = false;
                         st.grid.step = time.sec;                // grid statistics , save to nv
-                        ha.send("voltage_grid", 0, "v");
+                        ha.send("voltage_grid", 0, "V");
                     }
                 } else {
                     if (st.grid.state == null) {
                         log("grid is online", index, 1);
-                        ha.send("voltage_grid", state.esp[cfg.grid.espVoltage].toFixed(0), "v");
+                        ha.send("voltage_grid", state.esp[cfg.grid.espVoltage].toFixed(0), "V");
                         st.grid.state = true;
                     }
                     if (st.grid.state == false) {
@@ -195,7 +196,7 @@ let
                         // log sunlight daily index
                         log("grid back online, offline for: " + time.sec - st.grid.step + "s", index, 2);
                         st.grid.state = true;
-                        ha.send("voltage_grid", 0, "v");
+                        ha.send("voltage_grid", 0, "V");
                     }
                 }
             }
@@ -218,7 +219,7 @@ let
                 setInterval(() => { automation[index](index); }, 1e3);      // set minimum rerun time, otherwise this automation function will only on ESP and HA events
                 emitters();
                 log("automation system started", index, 1);                 // log automation start with index number and severity 
-                send("sensor", { sensorReg: true });                        // register with core to receive sensor data
+                send("coreData", { register: true, name: "tank_lth" });      // register with core to receive sensor data
             }
             function emitters() {
                 em.on(cfg.esp[cfg.inverter[0].espSwitch], (newState) => {   // keep inverter state synced to automation state
@@ -249,11 +250,6 @@ let
                         st.priority[0] = false;
                     }
                 });
-            }
-            function clientSensor(name) {
-                for (let x = 0; x < state.sensor.length; x++)
-                    if (state.sensor[x].name == name)
-                        return state.sensor[x].value;
             }
             function calcSolarPower() {
                 if (st.sunlight[sunConverted] == undefined) {
@@ -326,7 +322,7 @@ let
             },
         },
     },
-    sys = {
+    sys = {         // system area, don't need to touch anything below this line
         com: function () {
             udp.on('message', function (data, info) {
                 time.sync();   // sync the time.  time.sec time.min are global vars containing epoch time  
@@ -374,20 +370,19 @@ let
                                 if (cfg.ha != undefined) { send("haFetch"); }
                             }, 1e3);
                             break;
-                        case "sensor":
+                        case "coreData":
                             exist = false;
-                            sensorNum = null;
-                            for (let x = 0; x < state.sensor.length; x++) {
-                                if (state.sensor[x].name == buf.obj.name) {      // a client is sending sensor data for the first time
-                                    state.sensor[x].value = buf.obj.value;
-                                    state.sensor[x].unit = buf.obj.unit;
+                            coreDataNum = null;
+                            for (let x = 0; x < state.coreData.length; x++) {
+                                if (state.coreData[x].name == buf.obj.name) {      // a client is sending coreData for the first time
+                                    state.coreData[x].data = buf.obj.data;
                                     exist = true;
                                     break;
                                 }
                             }
                             if (exist == false) {
-                                sensorNum = state.sensor.push({ name: buf.obj.name, value: buf.obj.value, unit: buf.obj.unit }) - 1;
-                                log("sensor:" + sensorNum + " - is registering: " + buf.obj.name + " - " + buf.obj.value + " " + buf.obj.unit);
+                                coreDataNum = state.coreData.push({ name: buf.obj.name, data: buf.obj.data }) - 1;
+                                log("coreData:" + coreDataNum + " - is registering: " + buf.obj.name + " - " + buf.obj.data);
                             }
                             break;
                         case "diag":                // incoming diag refresh request, then reply object
@@ -427,7 +422,7 @@ let
         },
         init: function () {
             nv = {};
-            state = { auto: [], ha: [], esp: [], sensor: [], onlineHA: false, onlineESP: false, online: false };
+            state = { auto: [], ha: [], esp: [], coreData: [], onlineHA: false, onlineESP: false, online: false };
             time = {
                 sec: null, min: null,
                 sync: function () {
@@ -435,12 +430,7 @@ let
                     this.min = Math.floor(Date.now() / 1000 / 60);
                 }
             };
-            esp = {
-                send: function (name, state) {
-                    if (isFinite(Number(name)) == true) send("espState", { name: cfg.esp[name], state: state })
-                    else send("espState", { name: name, state: state })
-                }
-            };
+            esp = { send: function (name, state) { send("espState", { name: name, state: state }) } };
             ha = {
                 getEntities: function () { send("haQuery") },
                 send: function (name, state, unit, id) {  // if ID is not expressed for sensor, then sensor data will be send to HA system 0
@@ -606,6 +596,9 @@ let
 setTimeout(() => { sys.init(); }, 1e3);
 function bot(id, data, obj) { send("telegram", { class: "send", id: id, data: data, obj: obj }) }
 function send(type, obj, name) { udp.send(JSON.stringify({ type: type, obj: obj, name: name }), 65432, '127.0.0.1') }
+function coreData(name) {
+    for (let x = 0; x < state.coreData.length; x++) if (state.coreData[x].name == name) return state.coreData[x].data;
+}
 function log(message, index, level) {
     if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
     else send("log", { message: message, mod: state.auto[index].name, level: level });
