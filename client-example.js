@@ -74,7 +74,7 @@ let
          */
         }
     ];
-let
+    let
     user = {        // user configurable block - Telegram 
         telegram: { // enter a case matching your desireable input
             agent: function (msg) {
@@ -402,7 +402,7 @@ function bot(id, data, obj) { send("telegram", { class: "send", id: id, data: da
 function send(type, obj, name) { udp.send(JSON.stringify({ type: type, obj: obj, name: name }), 65432, '127.0.0.1') }
 function coreData(name) {
     for (let x = 0; x < state.coreData.length; x++) if (state.coreData[x].name == name) return state.coreData[x].data;
-    return null;
+    return {};
 }
 function log(message, index, level) {
     if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
