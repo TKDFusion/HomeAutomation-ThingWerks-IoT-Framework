@@ -6,7 +6,7 @@
 https://github.com/thwerks/ThingWerks-IoT-Frmework/blob/main/Readme-Getting-Started.md 
 
 ## Preamble:
-You can create NodeJS automations with GUI in just minutes wiht this framework. This framework was built with Home Assistant GUI and ESPHome in mind but they are not required. This is an industrial automation and control framework. It has a Core which facilitates HomeAssitant, ESP, Telegram, Client Automation and inter-client communication. The Clients connect to the Core for data and perform the logic and control via the devices connected to the Core. 
+You can create NodeJS automations with GUI in just minutes with this framework. This framework was built with Home Assistant GUI and ESPHome in mind but they are not required. This is an industrial automation and control framework. It has a Core which facilitates HomeAssitant, ESP, Telegram, Client Automation and inter-client communication. The Clients connect to the Core for data and perform the logic and control via the devices connected to the Core. 
 
 Use this ThingWerks IoT framework to create irrigation and water management systems, solar, generator and other electrical control systems and other types of industrial automations with excellent reliability. 
 
