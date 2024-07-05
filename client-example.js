@@ -14,19 +14,22 @@ let
     },
     automation = [                                                          // create an (index, clock) => {},  array member function for each automation you want to create
         (index, clock) => {                                                 // local time: time.sec, time.min, time.hour, time.mil  --  time.epoch, time.epochMin (epoch times)
-            if (!state.auto[index]) {                                       // initialize automation
+            if (!state.auto[index]) init();                                 // initialize automation
+            let st = state.auto[index];                                     // set automation state object's shorthand name to "st" (state) 
+            function init() {
                 state.auto.push({                                           // create object for this automation in local state
                     name: "Auto-System",                                    // give this automation a name 
                     example: { started: false, step: time.sec }             // initialize an object for each of this automation's devices or features     
                 });
                 setInterval(() => { automation[index](index); }, 1e3);      // set minimum rerun time, otherwise this automation function will only on ESP and HA push updates / events
-                log("system started", index, 1);                            // log automation start with index number and severity 
-                em.on("state" + "input_button.test", () => button.test());  // create an event emitter for HA or ESP entities that call a member function when data is received
+                log("system started", index, 1);                            // log automation start with index number and severity (0: debug, 1:event, 2: warning, 3: error)
+                em.on("input_button.test", () => button.test());            // create an event emitter for HA or ESP entity that calls a function when data is received
+                em.on("power1-relay1", (newState) => {                      // an event emitter for HA or ESP device that directly performs a function
+                    log("my esp toggle function", index, 1);     
+                });
                 send("coreData", { register: true, name: "myObject" });     // register with core to receive data from other client
             }
-            let st = state.auto[index];                                     // set automation state object's shorthand name to "st" (state) 
-
-            let button = {
+            let button = {                                                  // example methods of toggling ESP or Home Assistant entities and sensors
                 test: function () {                                         // example object member function called by emitter
                     ha.send("switch.fan_exhaust_switch", false);            // different methods to set state of HA and ESP entities
                     ha.send("input_boolean.fan_auto", true);
@@ -69,7 +72,7 @@ let
                 http:/127.0.0.1:20000/tg ------last 100 received Telegram messages
                 http:/127.0.0.1:20000/nv ------show all core non-volatile memory
                 http:/127.0.0.1:20000/state ---show all core volatile memory
-                http:/127.0.0.1:20000/cfg -----show all core hard coded configuration
+                http:/127.0.0.1:20000/cfg -----show all core configuration
                 http:/127.0.0.1:20000/log -----last 500 log messages
          */
         }
