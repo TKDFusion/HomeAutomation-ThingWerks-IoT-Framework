@@ -30,7 +30,7 @@
     * as an alternative, ESPHome devices can be added to HomeAssistant and can referenced in the tw-client rather than using ESPHome system in TW Core/config
 3) Setup HA
     * create Toggle Helpers to control your TW Client automations and other control you want to access ffrom the clients.
-    * copy and paste the entity names into client configs and shown in the client example 
+    * copy and paste the entity names from the Home Assustan entity list into client configs as shown in the client example 
     * create your control panel in HA and reference sensors from tw-clients. fine them in the HA Entities list.
 
 ### Build Your Automation
