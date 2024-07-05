@@ -95,7 +95,7 @@ let
             calcVoltsDC();
             gridDetection();
             //   welderDetection();
-            if (state.ha[cfg.solar.inverterAuto] == true) {
+            if (state.ha != undefined && state.ha[cfg.solar.inverterAuto] == true) {
                 inverterAuto();     // inverterAuto calls solarAutomation
                 if (st.welder == false) solarAutomation();
             }
