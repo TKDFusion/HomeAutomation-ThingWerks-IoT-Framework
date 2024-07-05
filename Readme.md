@@ -2,6 +2,7 @@
 
 *This project is interested in collaborating with integration of the Zigbee2mqtt NodeJS API* https://www.npmjs.com/package/zigbee2mqtt 
 
+## See https://github.com/thwerks/ThingWerks-IoT-Frmework/blob/main/Readme-Getting-Started.md for step by step instructions
 ### Preamble:
 This framework was built with Home Assistant GUI and ESPHome in mind but they arnt required. This is an industrial automation and contorl framework. It has a Core which facilitates HomeAssitant, ESP, Telegram, Client Automation and interclient communication. The Clients connect to the Core for data and perform the logic and control via the devices connected to the Core. 
 
