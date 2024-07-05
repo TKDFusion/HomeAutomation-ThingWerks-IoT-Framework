@@ -855,6 +855,8 @@ if (isMainThread) {
                 };
             },
             checkArgs: function () {
+                let journal = false;
+                if (process.argv[3] == "-j") journal = true;
                 if (process.argv[2] == "-i") {
                     log("installing ThingWerks-Core service...");
                     let service = [
@@ -866,10 +868,10 @@ if (isMainThread) {
                         "WantedBy=multi-user.target\n",
                         "[Service]",
                         "ExecStartPre=/bin/bash -c 'uptime=$(awk \\'{print int($1)}\\' /proc/uptime); if [ $uptime -lt 300 ]; then sleep 45; fi'",
-                        "ExecStartPre=mv /apps/log-tw-core.txt /apps/log-tw-core-last.txt",
-                        "ExecStart=nodemon " + cfg.workingDir + "core.js -w " + cfg.workingDir + "core.js --exitcrash",
-                        "StandardOutput=file:/apps/log-tw-core.txt",
-                        "Type=simple",
+                        ((journal == false) ? "ExecStartPre=mv /apps/log-tw-core.txt /apps/log-tw-core-last.txt\nExecStart=nodemon "
+                            + cfg.workingDir + "core.js -w " + cfg.workingDir + "core.js --exitcrash" : "ExecStart=nodemon "
+                            + cfg.workingDir + "core.js -w " + cfg.workingDir + "core.js --exitcrash"),
+                        ((journal == false) ? "StandardOutput=file:/apps/log-tw-core.txt\n Type=simple" : "Type=simple"),
                         "User=root",
                         "Group=root",
                         "WorkingDirectory=" + cfg.workingDir,
