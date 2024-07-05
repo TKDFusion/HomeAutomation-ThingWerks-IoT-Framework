@@ -509,7 +509,7 @@ if (isMainThread) {
                                 break;
                             case "reset":
                                 log("resetting esp entity array for ESP: " + data.esp, 0, 1);
-                                state.esp[data.esp].entity = [];
+                                if (state.esp[data.esp] != undefined) state.esp[data.esp].entity = [];
                                 break;
                             case "state":
                                 //   console.log("incoming state change: ", state.esp[data.esp].entity[data.obj.io]);
