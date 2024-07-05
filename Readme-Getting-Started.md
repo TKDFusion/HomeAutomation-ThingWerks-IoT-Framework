@@ -6,7 +6,7 @@
   
 ### Prepare Files & Environment
 1) Create /apps/tw Application directory and change to this directory
-   * the tw-core has some dependencies to useing the /apps/tw directory
+   * the tw-core has some dependencies to using the /apps/tw directory
 2) Install NodeJS (preferably v20) and necessary NPM packages
    * npm install express
    * npm install websocket
@@ -17,7 +17,7 @@
 4) Download tw-core.js, tw-client-example.js and config example and place into your app directory
 
 ### Setup ESPHome Devices, Home Assistant and build your automation
-2) Porgram all your ESP devices using ESPHome manager
+2) Program all your ESP devices using ESPHome manager
     * if connected via USB `docker run --device=/dev/ttyUSB0 --rm --net=host -v "${PWD}":/config -it ghcr.io/esphome/esphome`
     * if already connected w via wifi `docker run --device=/dev/ttyUSB0 --rm --net=host -v "${PWD}":/config -it ghcr.io/esphome/esphome`
     * `http://172.0.0.1:6052`
@@ -30,13 +30,13 @@
     * as an alternative, ESPHome devices can be added to HomeAssistant and can referenced in the tw-client rather than using ESPHome system in TW Core/config
 3) Setup HA
     * create Toggle Helpers to control your TW Client automations and other control you want to access ffrom the clients.
-    * copy and paste the entity names from the Home Assustan entity list into client configs as shown in the client example 
+    * copy and paste the entity names from the Home Assistant entity list into client configs as shown in the client example 
     * create your control panel in HA and reference sensors from tw-clients. fine them in the HA Entities list.
 
 ### Build Your Automation
 1) Review the client-example.js for complete programming guide
 2) Test run Core and Clients in the terminal using `node` or `nodemon` and use log to determine proper operation
-3) Dubugging:
+3) Debugging:
     * use firefox to view the URL for pretty JSON formatting
     * client memory `http://127.0.0.1:20000/client` 
     * core states `http://127.0.0.1:20000/state`
@@ -52,6 +52,3 @@
     * `node client-clientName.js -i`  (or -u to uninstall)
     * file name becomes the service name prepended by `tw`
     * monitor using sudo journalctl `-efu tw-client-name`
-   
-
-
