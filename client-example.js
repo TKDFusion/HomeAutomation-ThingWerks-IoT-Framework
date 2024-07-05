@@ -13,7 +13,7 @@ let
         ]
     },
     automation = [                                                          // create an (index, clock) => {},  array member function for each automation you want to create
-        (index, clock) => {
+        (index, clock) => {                                                 // local time: time.sec, time.min, time.hour, time.mil  --  time.epoch, time.epochMin (epoch times)
             if (!state.auto[index]) {                                       // initialize automation
                 state.auto.push({                                           // create object for this automation in local state
                     name: "Auto-System",                                    // give this automation a name 
@@ -74,7 +74,7 @@ let
          */
         }
     ];
-    let
+let
     user = {        // user configurable block - Telegram 
         telegram: { // enter a case matching your desireable input
             agent: function (msg) {
@@ -126,10 +126,10 @@ let
             },
         },
     },
-    sys = {         // system area, don't need to touch anything below this line
+    sys = {         // ______________________system area, don't need to touch anything below this line__________________________________
         com: function () {
             udp.on('message', function (data, info) {
-                time.sync();   // sync the time.  time.sec time.min are global vars containing epoch time  
+                time.sync();   // sync the time.  time.epoch time.min are global vars containing epoch time  
                 let buf = JSON.parse(data);
                 if (buf.type != "async") {
                     //  console.log(buf);
@@ -178,14 +178,14 @@ let
                             exist = false;
                             coreDataNum = null;
                             for (let x = 0; x < state.coreData.length; x++) {
-                                if (state.coreData[x].name == buf.obj.name) {      // a client is sending coreData for the first time
-                                    state.coreData[x].data = buf.obj.data;
+                                if (state.coreData[x].name == buf.obj.name) {
+                                    state.coreData[x].data = JSON.parse(data);
                                     exist = true;
                                     break;
                                 }
                             }
                             if (exist == false) {
-                                coreDataNum = state.coreData.push({ name: buf.obj.name, data: buf.obj.data }) - 1;
+                                coreDataNum = state.coreData.push({ name: buf.obj.name, data: JSON.parse(data).data }) - 1;
                                 log("coreData:" + coreDataNum + " - is registering: " + buf.obj.name + " - " + buf.obj.data);
                             }
                             break;
@@ -228,10 +228,17 @@ let
             nv = {};
             state = { auto: [], ha: [], esp: [], coreData: [], onlineHA: false, onlineESP: false, online: false };
             time = {
-                sec: null, min: null,
+                mil: null, sec: null, min: null, hour: null, day: null, week: null, epoch: null, epochMin: null, epochMil: null,
                 sync: function () {
-                    this.sec = Math.floor(Date.now() / 1000);
-                    this.min = Math.floor(Date.now() / 1000 / 60);
+                    let date = new Date();
+                    this.epoch = Math.floor(Date.now() / 1000);
+                    this.epochMil = Math.floor(Date.now());
+                    this.epochMin = Math.floor(Date.now() / 1000 / 60);
+                    this.day = date.getDay();
+                    this.hour = date.getHours();
+                    this.min = date.getMinutes();
+                    this.sec = date.getSeconds();
+                    this.mil = date.getMilliseconds();
                 }
             };
             esp = { send: function (name, state) { send("espState", { name: name, state: state }) } };
