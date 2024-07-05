@@ -55,4 +55,19 @@ some debian system might need:
 
 If there is no device at location `/dev/ttyUSB0` then the docker container will not start automatically and you must use the command below to start the container once you have connected your device. 
 
+Start without USB:
 `docker run --rm --net=host -v "${PWD}":/config -it ghcr.io/esphome/esphome`
+
+Start with USB:
+`docker run --device=/dev/ttyUSB0 --rm --net=host -v "${PWD}":/config -it ghcr.io/esphome/esphome`
+
+### Upgrade ESPHome and HomeAssistant containers: 
+
+```
+cd /apps/ha
+docker-compose pull
+docker stop homeassistant
+docker remove homeassistant
+docker compose up -d
+
+```
