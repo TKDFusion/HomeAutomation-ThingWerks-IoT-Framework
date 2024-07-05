@@ -43,7 +43,7 @@
     * esp devices `http://127.0.0.1:20000/esp`
     * ha helpers `http://127.0.0.1:20000/ha`
 
-### Install the Core and Client
+### Install the Core and Clients
 1) Install the core using  
     * `node core.js -i`  (or -u to uninstall)
     * monitor log file `tail -f /apps/log-tw-core.txt -n 500`
