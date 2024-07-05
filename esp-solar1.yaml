@@ -1,6 +1,6 @@
 esphome:
-  name: power1
-  friendly_name: Power1
+  name: Solar1
+  friendly_name: Solar1
 esp32:
   board: esp32dev
   framework:
@@ -8,15 +8,15 @@ esp32:
 logger:
 api:
   encryption:
-    key: "myKey"
+    key: "5D3K/r+a5sVIDN3A4tflgP9QZLvJ4mnkfSqqwBHgI9g="
 ota:
   platform: esphome
-  password: "password"
+  password: "b4c8dd7550c637b1ccafcc9017b09fba"
 #  num_attempts: 3
 #  safe_mode: no
 wifi:
   networks:
-  - ssid: WiFi-Battery
+  - ssid: WiFi-Solar1
   manual_ip:
     static_ip: 10.20.0.96
     gateway: 10.20.0.1
@@ -103,7 +103,7 @@ sensor:
             window_size: 60
             send_every: 1
   - platform: adc
-    name: "Sunlight"
+    name: "Sun-Level"
     pin: GPIO32
     id: sun
     unit_of_measurement: "V"
@@ -116,7 +116,7 @@ sensor:
             window_size: 10
             send_every: 1
   - platform: adc
-    name: "Temp-Battery-Room"
+    name: "Temp-Battery"
     pin: GPIO33
     id: temp
     unit_of_measurement: "V"
