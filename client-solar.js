@@ -52,7 +52,6 @@ let
                 { onSun: 2.65, offSun: 2.6, onVolts: 53.5, offVolts: 53.2, haAuto: 4, devices: ["input_boolean.auto_pump_transfer"] },
                 { onSun: 2.5, offSun: 2.4, timeOnHour: 9, timeOnMin: 30, devices: ["input_boolean.auto_pump_pressure_turbo"] },
                 { onSun: 2.5, offSun: 2.4, devices: ["power1-relay2"] }, // fan
-
             ],
         },
         inverter: [
@@ -66,10 +65,10 @@ let
                 espPower: 5,            // inverter remote power 
                 voltsFactor: 20.33,     // multiplier for voltage divider
                 voltsRun: 52.5,         // volts to start inverter - 
-                voltsStop: 51.4,
+                voltsStop: 51.4,        // volts to start inverter - 
                 sunRun: 2.2,
-                sunStop: 2.0,           // reduce battery wear
-                welderWatts: 4000,      // high loads detected
+                sunStop: 2.0,           // reduce battery wear - 
+                welderWatts: 4000,      // high load detected
                 welderTimeout: 240      // time in seconds
             },
             {
