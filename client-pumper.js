@@ -12,6 +12,7 @@ let
             "input_boolean.auto_pump_transfer",
             "input_boolean.auto_pump_pressure",
             "input_boolean.auto_solar",
+            "input_boolean.auto_pump_pressure_turbo",
         ],
         esp: [
             "lth-tank",
@@ -23,8 +24,8 @@ let
             "uth-relay3",
             "uth-relay4",
             "uth-pump",
-            "flow-lth-submersible"  // 9 
-
+            "flow-lth-submersible",  // 9 
+            "flow-uth-pump",
         ],
         dd: [       // config for the Demand/Delivery automation function, 1 object for each DD system
             {   // DD system example
@@ -99,6 +100,7 @@ let
                 name: "UTH-Pressure",       // Demand Delivery system 2d
                 ha: {
                     auto: 3,                // home assistant auto toggle ID number (specified above in cfg.ha config)
+                    turbo: 5,
                     //timer: 1,             // home assistant timer toggle ID number (specified above in cfg.ha config)
                 },
                 pump: [
@@ -111,17 +113,23 @@ let
                 ],
                 press: {
                     output: 2,          // pressure sensor number (in cfg.press block)
-                    input: undefined
+                    input: undefined,
+                    startTurbo: 26,
+                    stopTurbo: 31,
                 },
                 flow: {                 // object must be declared
-                    id: undefined,      // flow sensor number (in cfg.flow block)
+                    id: 1,      // flow sensor number (in cfg.flow block)
+                    startWarn: 15,          // min start flow before triggering notification (useful for filters)
+                    startError: 2,         // minimum flow rate pump must reach at start
+                    startWait: 6,           // seconds to wait before checking flow after pump starts
                 },
                 fault: {
                     retry: 10,          // time in seconds to wait for retry
                     retryFinal: 2,      // time in minutes to wait for final retry
                     runLong: 60,       // max run time in minutes
-                    cycleCount: 3,      // max cycle times per cycleTime window
+                    cycleCount: 0,      // max cycle times per cycleTime window
                     cycleTime: 120,     // max cycleTime time window  (in seconds)
+                    flushWarning: false,
                 },
             }
         ],
@@ -144,7 +152,7 @@ let
                 type: "esp",            // the sensor ID in "ha" or "esp" block
                 id: 2,                  // HA or ESP ID number, corresponds to array number (zero indexed) 
                 stop: 1,                // Demand Delivery system stop level in (meters) or PSI
-                start: .87,             // Demand Delivery system start level (meters) or PSI
+                start: .95,             // Demand Delivery system start level (meters) or PSI
                 // warn: .5,            // threshold to send warning notification on pump start
                 average: 40,            // amount of samples to average over
                 voltageMin: 0.58,      // calibration, minimum value when sensor is at atmospheric pressure 
@@ -155,32 +163,37 @@ let
                 unit: "psi",            // measurement unit (i.e. PSI or meters) "m" or "psi" only
                 type: "esp",            // the sensor ID in "ha" or "esp" block
                 id: 8,                  // HA or ESP ID number, corresponds to array number (zero indexed) 
-                stop: 32,               // Demand Delivery system stop level in (meters) or PSI
-                start: 25,              // Demand Delivery system start level (meters) or PSI
+                stop: 24,               // Demand Delivery system stop level in (meters) or PSI
+                start: 20,              // Demand Delivery system start level (meters) or PSI
                 average: 5,             // amount of samples to average over
                 voltageMin: 0.609,      // calibration, minimum value when sensor is at atmospheric pressure 
                 pressureRating: 174,    // max rated pressure of transducer in PSI
             },
         ],
         flow: [      // config for flow meters used with Home Assistant -- these flow meters get sent back to HA as sensors
+            /*
+            { size: "3/8", name: "Sea YF-S402C", pulse: 23.0, flow: ".3-10 LPM" },
+            { size: "1/2", name: "Sea YF-S201", pulse: 7.5, flow: "1-30 LPM" },
+            { size: "3/4", name: "FS300A-G3/4", pulse: 5.5, flow: "1-60 LPM" },
+            { size: "1", name: "FS400A-G1", pulse: 4.8, flow: "1-60 LPM" },
+            { size: "1", name: "Sea YF-G1", pulse: 1, flow: "2-100 LPM" },
+            { size: "1-1/4", name: "Sea DN32", pulse: .45, flow: "120 LPM" },
+            { size: "1-1/2", name: "Sea YF-DN40", pulse: .45, flow: "5-150 LPM" },
+            { size: "2", name: "Sea YF-DN50", pulse: .2, flow: "10-200 LPM" },
+            { size: "3", name: "DN80", pulse: .55, flow: "30-500" },
+             */
             {   // flow meter 1 example
-                /*
-
-                        { size: "3/8", name: "Sea YF-S402C", pulse: 23.0, flow: ".3-10 LPM" },
-                        { size: "1/2", name: "Sea YF-S201", pulse: 7.5, flow: "1-30 LPM" },
-                        { size: "3/4", name: "FS300A-G3/4", pulse: 5.5, flow: "1-60 LPM" },
-                        { size: "1", name: "FS400A-G1", pulse: 4.8, flow: "1-60 LPM" },
-                        { size: "1", name: "Sea YF-G1", pulse: 1, flow: "2-100 LPM" },
-                        { size: "1-1/4", name: "Sea DN32", pulse: 4.5, flow: "120 LPM" },
-                        { size: "1-1/2", name: "Sea YF-DN40", pulse: .45, flow: "5-150 LPM" },
-                        { size: "2", name: "Sea YF-DN50", pulse: .2, flow: "10-200 LPM" },
-                        { size: "3", name: "DN80", pulse: .55, flow: "30-500" },
-
-                */
                 name: "flow_lth_submersible",           // flow meter name that will appear in HA as a sensor (do not use spaces or dash, underscore only)
                 type: "esp",            // the sensor is "ha" or "esp" 
                 id: 9,                  // HA or ESP ID number, corresponds to array number (zero indexed) 
                 pulse: 0.2,             // pulse calculation factor for your specific flow meter
+                unit: "m3",             // unit of measurement (cubic meters)
+            },
+            {   // flow meter 1 example
+                name: "flow_uth_pump",  // flow meter name that will appear in HA as a sensor (do not use spaces or dash, underscore only)
+                type: "esp",            // the sensor is "ha" or "esp" 
+                id: 10,                 // HA or ESP ID number, corresponds to array number (zero indexed) 
+                pulse: 4.8,             // pulse calculation factor for your specific flow meter
                 unit: "m3",             // unit of measurement (cubic meters)
             }
         ],
@@ -201,6 +214,8 @@ let
                 if (hour == 8 && min == 30) {
                     //     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_pump_transfer", true);
                 }
+                if (hour == 9 && min == 30) { ha.send("input_boolean.auto_pump_pressure_turbo", true); }
+                if (hour == 14 && min == 30) { ha.send("input_boolean.auto_pump_pressure_turbo", false); }
                 if (hour == 18 && min == 0) {
                     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", false);
                     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_pump_transfer", false);
@@ -208,6 +223,7 @@ let
                 if (hour == 19 && min == 30 || hour == 21 && min == 0) {
                     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_pump_pressure", false);
                 }
+                if (hour == 0 && min == 0) for (let x = 0; x < cfg.flow.length; x++) cfg.flow[x].today = 0; // reset daily low meters
                 calcFlowMeter();
                 file.write.nv();
                 for (let x = 0; x < cfg.dd.length; x++) { state.auto[index].dd[x].warn.flowFlush = false; }
@@ -223,7 +239,8 @@ let
                                 switch (dd.fault.flow) {
                                     case false: // when pump is STOPPED and not flow faulted
                                         if (((dd.press.out.cfg.unit == "m") ? dd.press.out.state.meters : dd.press.out.state.psi) <= dd.press.out.cfg.start) {
-                                            log(dd.cfg.name + " - " + dd.press.out.cfg.name + " is low (" + dd.press.out.state.meters.toFixed(2) + "m) - pump is starting", index, 1);
+                                            log(dd.cfg.name + " - " + dd.press.out.cfg.name + " is low (" + ((dd.press.out.cfg.unit == "m") ? dd.press.out.state.meters.toFixed(2)
+                                                + "m" : dd.press.out.state.psi.toFixed(0) + "psi") + ") - pump is starting", index, 1);
                                             pumpStart(true);
                                             return;
                                         }
@@ -264,7 +281,7 @@ let
                                     pumpStop();
                                     return;
                                 }
-                                if (time.sec - dd.state.timerRun >= dd.cfg.fault.runLong * 60) {
+                                if (time.epoh - dd.state.timerRun >= dd.cfg.fault.runLong * 60) {
                                     log(dd.cfg.name + " - pump: " + dd.pump[0].name + " - max runtime exceeded - DD system shutting down", index, 3);
                                     ha.send(dd.auto.name, false);
                                     dd.auto.state = false;
@@ -300,7 +317,7 @@ let
                                 pumpStart();
                                 return;
                             }
-                            if (dd.flow != undefined && dd.flow.lm > dd.cfg.flow.startError && dd.warn.flowFlush == false) {
+                            if (dd.flow != undefined && dd.flow.lm > dd.cfg.flow.startError && dd.warn.flowFlush == false && dd.cfg.fault.flushWarning != false) {
                                 dd.warn.flowFlush = true;
                                 log(dd.cfg.name + " - Auto is off but flow is detected (" + dd.flow.lm.toFixed(1) + ") possible sensor damage or flush operation", index, 2);
                                 if (dd.pump[0].state === null || dd.pump[0].state == true) pumpStop(true);
@@ -317,15 +334,15 @@ let
                 }
                 function pumpStart(sendOut) {
                     if (dd.state.cycleCount == 0) {
-                        dd.state.cycleTimer = time.sec;
-                        dd.state.timerRise = time.sec;
+                        dd.state.cycleTimer = time.epoh;
+                        dd.state.timerRise = time.epoh;
                     } else if (dd.state.cycleCount > dd.cfg.fault.cycleCount) {
-                        if (time.sec - dd.state.cycleTimer < dd.cfg.fault.cycleTime) {
+                        if (time.epoh - dd.state.cycleTimer < dd.cfg.fault.cycleTime) {
                             log(dd.cfg.name + " - pump is cycling to frequently - DD system shutting down", index, 3);
                             ha.send(dd.auto.name, false);
                             dd.auto.state = false;
                             return;
-                        } else { dd.state.cycleTimer = time.sec; dd.state.cycleCount = 0; }
+                        } else { dd.state.cycleTimer = time.epoh; dd.state.cycleCount = 0; }
                     }
                     if (dd.press.in != undefined && dd.press.in.state.percent <= dd.cfg.press.inputMin) {
                         log(dd.cfg.name + " - input tank level is too low - DD system shutting down", index, 3);
@@ -341,7 +358,7 @@ let
                     if (dd.flow != undefined) { dd.flow.batch = nv.flow[dd.cfg.flow.id].total; }
                     dd.fault.flow = false;
                     dd.state.run = true;
-                    dd.state.timerRun = time.sec;
+                    dd.state.timerRun = time.epoh;
                     dd.state.flowCheck = false;
                     dd.state.flowCheckPassed = false;
                     dd.state.timeoutOn = false;
@@ -356,12 +373,11 @@ let
                         if (dd.pump[0].cfg.type == "ha") ha.send(cfg.ha[dd.pump[0].id], true); // if no "sendOut" then auto system is syncing state with HA/ESP
                         else esp.send(dd.pump[0].name, true);
                         log(dd.cfg.name + " - starting pump: " + dd.pump[0].name + " - cycle count: "
-                            + dd.state.cycleCount + "  Time: " + (time.sec - dd.state.cycleTimer), index, 1);
+                            + dd.state.cycleCount + "  Time: " + (time.epoh - dd.state.cycleTimer), index, 1);
                     }
                 }
                 function pumpStop(fault) {
-                    let
-                        runTime = time.sec - dd.state.timerRun,
+                    let runTime = time.epoh - dd.state.timerRun,
                         hours = Math.floor(runTime / 60 / 60),
                         minutes = Math.floor(runTime / 60),
                         extraSeconds = runTime % 60;
@@ -369,7 +385,7 @@ let
                     if (dd.flow != undefined) {
                         let tFlow = nv.flow[dd.cfg.flow.id].total - dd.flow.batch;
                         log(lbuf + " - pumped " + tFlow.toFixed(2) + "m3 - Average: "
-                            + ((tFlow * 1000) / (time.sec - dd.state.timerRun) * 60).toFixed(1) + "lm", index, 1);
+                            + ((tFlow * 1000) / (time.epoh - dd.state.timerRun) * 60).toFixed(1) + "lm", index, 1);
                     }
                     else log(lbuf, index, 1);
                     dd.state.timeoutOff = false;
@@ -384,7 +400,7 @@ let
                     }
                 }
                 function pumpPressCheck() {
-                    if (time.sec - dd.state.timerRise >= dd.cfg.press.outputRiseTime) {
+                    if (time.epoh - dd.state.timerRise >= dd.cfg.press.outputRiseTime) {
                         if (dd.press.out.cfg.unit == "m") {
                             log("checking pressure rise, previous: " + dd.state.pressStart + "  current: " + dd.press.out.state.percent
                                 + "  difference: " + (dd.press.out.state.percent - dd.state.pressStart) + "%", index, 0);
@@ -415,7 +431,7 @@ let
                             }
                             dd.state.pressStart = dd.press.out.state.psi;
                         }
-                        dd.state.timerRise = time.sec;
+                        dd.state.timerRise = time.epoh;
                     }
                 }
                 function pumpFlowCheck() {
@@ -469,7 +485,7 @@ let
                                 dd.fault.flow = false;
                                 dd.fault.flowRestarts = 0;
                                 dd.warn.tankLow = false;
-                                dd.state.cycleTimer = time.sec;
+                                dd.state.cycleTimer = time.epoh;
                                 dd.state.cycleCount = 0;
                                 return;
                             case false:
@@ -504,7 +520,7 @@ let
                         log("initializing flow meter data...", index, 1);
                         nv.flow = [];
                         for (let x = 0; x < cfg.flow.length; x++) {
-                            nv.flow.push({ total: 0, min: [], hour: [], day: [] })
+                            nv.flow.push({ total: 0, min: [], hour: [], day: [], today: 0 })
                             for (let y = 0; y < 60; y++) nv.flow[x].min.push(0);
                             for (let y = 0; y < 24; y++) nv.flow[x].hour.push(0);
                             for (let y = 0; y < 30; y++) nv.flow[x].day.push(0);
@@ -593,16 +609,18 @@ let
                     calcFlow();
                     pushSensor();
                 }, 1e3);
+                emitters();
             }
             function pushSensor() {
                 let sendDelay = 0;
-                let list = ["_total", "_hour", "_day", "_lm"];
+                let list = ["_total", "_hour", "_day", "_lm", "_today"];
                 let pos = 0;
                 //              if (state.ha.ws.online == true) {
                 for (let x = 0; x < cfg.flow.length; x++) {
-                    let unit = [cfg.flow[x].unit, cfg.flow[x].unit, cfg.flow[x].unit, "L/m"]
-                    let value = [nv.flow[x].total, state.auto[index].flow[x].hour, state.auto[index].flow[x].day, state.auto[index].flow[x].lm];
-                    for (let y = 0; y < 4; y++) {
+                    let unit = [cfg.flow[x].unit, cfg.flow[x].unit, cfg.flow[x].unit, "L/m", "L"]
+                    let value = [nv.flow[x].total, state.auto[index].flow[x].hour, state.auto[index].flow[x].day
+                        , state.auto[index].flow[x].lm, nv.flow[x].today];
+                    for (let y = 0; y < 5; y++) {
                         if (state.auto[index].ha.pushLast[pos] == undefined) {
                             state.auto[index].ha.pushLast.push(Number(value[y]).toFixed(0));
                             sendHA(cfg.flow[x].name + list[y], Number(value[y]).toFixed(0), unit[y]);
@@ -644,9 +662,6 @@ let
                             psi: press.out.psi.toFixed(0)
                         }
                     });
-                    //    send("coreData", { name: press.cfg.name + "_percent", data: press.out.percent.toFixed(0) });
-                    //  send("coreData", { name: press.cfg.name + "_meters", data: press.out.meters.toFixed(2) });
-                    //    send("coreData", { name: press.cfg.name + "_psi", data: press.out.psi.toFixed(0) });
                 }
                 function sendHA(name, value, unit) { setTimeout(() => { ha.send(name, value, unit) }, sendDelay); sendDelay += 25; };
             }
@@ -654,8 +669,11 @@ let
                 for (let x = 0; x < cfg.flow.length; x++) {
                     if (cfg.flow[x].type == "esp") state.auto[index].flow[x].lm = state.esp[cfg.flow[x].id] / cfg.flow[x].pulse / 60;
                     else state.auto[index].flow[x].lm = state.ha[cfg.flow[x].id] / cfg.flow[x].pulse / 60;
-                    if (!isNaN(parseFloat(state.auto[index].flow[x].lm)) == true && isFinite(state.auto[index].flow[x].lm) == true && state.auto[index].flow[x].lm != null)
+                    if (!isNaN(parseFloat(state.auto[index].flow[x].lm)) == true && isFinite(state.auto[index].flow[x].lm) == true && state.auto[index].flow[x].lm != null) {
+                        if (nv.flow[x] == undefined) nv.flow[x] = { total: 0, min: [], hour: [], day: [] }
                         nv.flow[x].total += state.auto[index].flow[x].lm / 60 / 1000;
+                        nv.flow[x].today += state.auto[index].flow[x].lm / 60;
+                    }
                 }
             }
             function calcFlowMeter() {
@@ -679,6 +697,20 @@ let
                     for (let y = 0; y < 60; y++) hourNV += nv.flow[x].min[y];
                     nv.flow[x].hour[hour] = hourNV;
                 }
+            }
+            function emitters() {
+                em.on("input_boolean.auto_pump_pressure_turbo", (newState) => {
+                    if (newState == true) {
+                        log("UTH Pressure - enabling UTH pump turbo", index, 1);
+                        cfg.press[2].start = 26; cfg.press[2].stop = 31;
+                    } else {
+                        log("UTH Pressure - disabling UTH pump turbo", index, 1);
+                        cfg.press[2].start = 18; cfg.press[2].stop = 22;
+                    }
+                });
+                em.on("input_boolean.test", (newState) => {
+                    log("Test Emitter", index, 1);
+                });
             }
         },
         (index, clock) => {
@@ -753,10 +785,10 @@ let
             },
         },
     },
-    sys = {         // system area, don't need to touch anything below this line
+    sys = {         // ______________________system area, don't need to touch anything below this line__________________________________
         com: function () {
             udp.on('message', function (data, info) {
-                time.sync();   // sync the time.  time.sec time.min are global vars containing epoch time  
+                time.sync();   // sync the time.  time.epoch time.min are global vars containing epoch time  
                 let buf = JSON.parse(data);
                 if (buf.type != "async") {
                     //  console.log(buf);
@@ -805,14 +837,14 @@ let
                             exist = false;
                             coreDataNum = null;
                             for (let x = 0; x < state.coreData.length; x++) {
-                                if (state.coreData[x].name == buf.obj.name) {      // a client is sending coreData for the first time
-                                    state.coreData[x].data = buf.obj.data;
+                                if (state.coreData[x].name == buf.obj.name) {
+                                    state.coreData[x].data = JSON.parse(data);
                                     exist = true;
                                     break;
                                 }
                             }
                             if (exist == false) {
-                                coreDataNum = state.coreData.push({ name: buf.obj.name, data: buf.obj.data }) - 1;
+                                coreDataNum = state.coreData.push({ name: buf.obj.name, data: JSON.parse(data).data }) - 1;
                                 log("coreData:" + coreDataNum + " - is registering: " + buf.obj.name + " - " + buf.obj.data);
                             }
                             break;
@@ -855,10 +887,17 @@ let
             nv = {};
             state = { auto: [], ha: [], esp: [], coreData: [], onlineHA: false, onlineESP: false, online: false };
             time = {
-                sec: null, min: null,
+                mil: null, sec: null, min: null, hour: null, day: null, week: null, epoch: null, epochMin: null, epochMil: null,
                 sync: function () {
-                    this.sec = Math.floor(Date.now() / 1000);
-                    this.min = Math.floor(Date.now() / 1000 / 60);
+                    let date = new Date();
+                    this.epoch = Math.floor(Date.now() / 1000);
+                    this.epochMil = Math.floor(Date.now());
+                    this.epochMin = Math.floor(Date.now() / 1000 / 60);
+                    this.day = date.getDay();
+                    this.hour = date.getHours();
+                    this.min = date.getMinutes();
+                    this.sec = date.getSeconds();
+                    this.mil = date.getMilliseconds();
                 }
             };
             esp = { send: function (name, state) { send("espState", { name: name, state: state }) } };
@@ -1029,7 +1068,7 @@ function bot(id, data, obj) { send("telegram", { class: "send", id: id, data: da
 function send(type, obj, name) { udp.send(JSON.stringify({ type: type, obj: obj, name: name }), 65432, '127.0.0.1') }
 function coreData(name) {
     for (let x = 0; x < state.coreData.length; x++) if (state.coreData[x].name == name) return state.coreData[x].data;
-    return null;
+    return {};
 }
 function log(message, index, level) {
     if (level == undefined) send("log", { message: message, mod: cfg.moduleName, level: index });
