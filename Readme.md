@@ -2,7 +2,7 @@
 
 *This project is interested in collaborating with integration of the Zigbee2mqtt NodeJS API* https://www.npmjs.com/package/zigbee2mqtt 
 
-# See Getting Started for step by step instructions
+*See Getting Started for step by step instructions*
 https://github.com/thwerks/ThingWerks-IoT-Frmework/blob/main/Readme-Getting-Started.md 
 
 ## Preamble:
@@ -23,13 +23,13 @@ While Home Assistant excels in certain scenarios, it is unsuitable for industria
 
 In more complex environments with multiple sensors and outputs, Home Assistant just isnt up to the task. NodeJS is particularly well suited for automation ogic.
 
-### Compactness and Resource Efficiency (TW together with HA Core):
+## Compactness and Resource Efficiency (TW together with HA Core):
 
 The TW IoT with Home Assistant (HA) solution is highly compact and resource-efficient, especially with Home Assistant Core, which operates stably with just 500MB of RAM—unlike Home Assistant Supervised. During testing, Home Assistant Supervised consistently crashed with 1GB of RAM. The ESP Home web interface easily installs alongside HA Core, creating an efficient platform for modest IoT devices with 1GB of RAM.
 
 A key point is the remarkable responsiveness of the HA Core API, averaging 2-5ms with no timeouts. In contrast, Home Assistant Supervised can exhibit latency exceeding 100ms, occasionally becoming completely unreachable or crashing, likely due to resource-intensive background updates. Thus, using Home Assistant Supervised for reliable, time-critical operations is strongly advised against.
 
-### General Features
+## General Features
 * Has very stable power and network loss recovery 
 * Functions as an ESPHome subscriber
 * Supports Telegram for monitoring and remote control
@@ -37,7 +37,7 @@ A key point is the remarkable responsiveness of the HA Core API, averaging 2-5ms
 * Has a nice and easy to use logging function
 * Has SystemD service creator
 
-### Home Assistant Features
+## Home Assistant Features
 * TW IoT completely removes all need for automation logic and control in Home Assistant
 * This framework is immune to network interruptions with HA
 * Has full support for HA Websocket API
