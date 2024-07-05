@@ -46,11 +46,12 @@
 ### Install the Core and Clients
 1) Install the core using  
     * `node core.js -i`  (or -u to uninstall)
+       - `-i -j` to use journel logging rather than monitor log file 
     * monitor log file `tail -f /apps/log-tw-core.txt -n 500`
 2) Install the cleints
     * `node client-clientName.js -i`  (or -u to uninstall)
     * file name becomes the service name prepended by `tw`
-    * monitor using sudo journalctl `-efu tw-client-name1
+    * monitor using sudo journalctl `-efu tw-client-name`
    
 
 
