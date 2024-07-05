@@ -9,6 +9,7 @@ sudo service docker start
 ### Make dirs and create Docker Compose file:
 ```
 mkdir /apps/ha -p
+mkdir /apps/tw 
 cd /apps/ha
 nano ./docker-compose.yml
 ```
@@ -69,5 +70,4 @@ docker-compose pull
 docker stop homeassistant
 docker remove homeassistant
 docker compose up -d
-
 ```
