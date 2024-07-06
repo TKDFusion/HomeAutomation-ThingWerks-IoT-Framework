@@ -21,7 +21,7 @@
     * if connected via USB `docker run --device=/dev/ttyUSB0 --rm --net=host -v "${PWD}":/config -it ghcr.io/esphome/esphome`
     * if already connected w via wifi `docker run --device=/dev/ttyUSB0 --rm --net=host -v "${PWD}":/config -it ghcr.io/esphome/esphome`
     * `http://172.0.0.1:6052`
-    * add ESP devices to the TW Core `config.json`,
+    * add ESP devices to the TW Core `config.json`, ip address and api key,
     * download `config.json` example and put in `/app/tw/config.json`
         - Configure Home Assistant Parameters:
         - one object {} for each HA server containing: enable, address, port etc.
@@ -32,6 +32,7 @@
     * create Toggle Helpers to control your TW Client automations and other control you want to access ffrom the clients.
     * copy and paste the entity names from the Home Assistant entity list into client configs as shown in the client example 
     * create your control panel in HA and reference sensors from tw-clients. fine them in the HA Entities list.
+    * add Home Assistant server to the TW Core `config.json` file
 
 ## Build Your Automation
 1) Review the client-example.js for complete programming guide
