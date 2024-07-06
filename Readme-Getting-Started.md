@@ -16,7 +16,7 @@
    * npm install homeassistant
 4) Download tw-core.js, tw-client-example.js and config example and place into your app directory
 
-## Setup ESPHome Devices, Home Assistant and build your automation
+## Setup ESPHome Devices, Home Assistant, Configure TW Core 
 1) Program all your ESP devices using ESPHome manager
     * if connected via USB `docker run --device=/dev/ttyUSB0 --rm --net=host -v "${PWD}":/config -it ghcr.io/esphome/esphome`
     * if already connected w via wifi `docker run --device=/dev/ttyUSB0 --rm --net=host -v "${PWD}":/config -it ghcr.io/esphome/esphome`
