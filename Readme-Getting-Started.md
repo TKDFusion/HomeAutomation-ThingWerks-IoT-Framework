@@ -41,10 +41,10 @@
     * use firefox to view the URL for pretty JSON formatting
     * client memory `http://127.0.0.1:20000/client` 
     * core states `http://127.0.0.1:20000/state`
-    * esp devices `http://127.0.0.1:20000/esp`
-    * ha helpers `http://127.0.0.1:20000/ha`
+    * esp entities `http://127.0.0.1:20000/esp`
+    * HA entities `http://127.0.0.1:20000/ha`
 
-## Install the Core and Clients
+## Install the Core and Client services
 1) Install the core using  
     * `node core.js -i`  (or -u to uninstall)
        - `-i -j` to use journel logging rather than monitor log file 
