@@ -17,7 +17,7 @@
 4) Download tw-core.js, tw-client-example.js and config example and place into your app directory
 
 ## Setup ESPHome Devices, Home Assistant and build your automation
-2) Program all your ESP devices using ESPHome manager
+1) Program all your ESP devices using ESPHome manager
     * if connected via USB `docker run --device=/dev/ttyUSB0 --rm --net=host -v "${PWD}":/config -it ghcr.io/esphome/esphome`
     * if already connected w via wifi `docker run --device=/dev/ttyUSB0 --rm --net=host -v "${PWD}":/config -it ghcr.io/esphome/esphome`
     * `http://172.0.0.1:6052`
@@ -28,7 +28,7 @@
         - Configure ESP devices
         - One object per device containing IP Address and Security Key
     * as an alternative, ESPHome devices can be added to HomeAssistant and can referenced in the tw-client rather than using ESPHome system in TW Core/config
-3) Setup HA
+2) Setup HA
     * create Toggle Helpers to control your TW Client automations and other control you want to access ffrom the clients.
     * copy and paste the entity names from the Home Assistant entity list into client configs as shown in the client example 
     * create your control panel in HA and reference sensors from tw-clients. fine them in the HA Entities list.
