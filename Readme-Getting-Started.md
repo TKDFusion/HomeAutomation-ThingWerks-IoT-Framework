@@ -38,7 +38,7 @@
 1) Review the client-example.js for complete programming guide
 2) Test run Core and Clients in the terminal using `node` or `nodemon` and use the console logs to determine proper operation. Start TW-Core first, then run the Clients
 3) Debugging:
-    * use firefox to view the URL for pretty JSON formatting
+    * access these URLs in firefox for pretty JSON formatting
     * client memory `http://127.0.0.1:20000/client` 
     * core states `http://127.0.0.1:20000/state`
     * esp entities `http://127.0.0.1:20000/esp`
