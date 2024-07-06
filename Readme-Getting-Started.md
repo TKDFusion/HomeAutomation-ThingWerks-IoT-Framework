@@ -51,4 +51,4 @@
 2) Install the cleints
     * `node client-clientName.js -i`  (or -u to uninstall)
     * file name becomes the service name prepended by `tw`
-    * monitor using sudo journalctl `-efu tw-client-name`
+    * monitor using sudo `journalctl -efu tw-client-name`
