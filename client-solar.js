@@ -81,7 +81,7 @@ let
                 voltsFactor: 20.33,         // multiplier for voltage divider
                 voltsRun: 52.5,             // volts to start inverter - in addition to sunlight if configured
                 voltsStop: 51.4,            // volts to start inverter - will stop Independent of sunlight level
-                sunRun: 2.0,                // min sunlight needed in addition to battery voltage - optional
+                sunRun: 1.95,                // min sunlight needed in addition to battery voltage - optional
                 sunStop: 1.85,              // reduce battery wear, constant recharging - optional
                 welderWatts: 4000,          // high load detection - optional
                 welderTimeout: 240          // time in seconds to observe and reset- optional
@@ -130,7 +130,7 @@ let
                             if (state.esp[cfg.solar.espSunlight] >= cfg.solar.priority[x].onSun) {
                                 if (cfg.solar.priority[x].onVolts != undefined) {
                                     if (st.voltsDC >= cfg.solar.priority[x].onVolts) {
-                                        log("Sun is high and battery is enough (" + state.esp[cfg.solar.espSunlight].toFixed(2) + "v) - starting priority " + x + " devices", index, 1);
+                                        log("Sun is high and battery is enough (" + state.esp[cfg.solar.espSunlight].toFixed(2) + "v) - starting " + cfg.solar.priority[x].name, index, 1);
                                         send(true);
                                     }
                                 } else {
@@ -179,7 +179,7 @@ let
                                 log("Battery is low: " + st.voltsDC.toFixed(1) + ", " + cfg.inverter[x].name + " is switching to grid ", index, 2);
                                 inverterPower(x, false);
                             }
-                            checkCharging(false);
+                            if (st.inverter[x].nightMode == true) checkCharging(false);
                             break;
                         case false:  // inverter is stopped
                             checkCharging(true);
@@ -229,7 +229,7 @@ let
                             if (time.min >= cfg.inverter[x].nightModeStartMin) { nightMode = true; }
                         } else { nightMode = true; }
                     }
-                    else if (time.hour > cfg.inverter[x].nightModeStartHour || time.hour < 8) { nightMode = true; }
+                    else if (time.hour > cfg.inverter[x].nightModeStartHour || time.hour < 6) { nightMode = true; }
                     else nightMode = false;
                 } else nightMode = false;       // if sun is low and not nightMode - switch the inverter off  -- save battery wear
                 if (nightMode == true) {
@@ -387,7 +387,7 @@ let
                     priority: [],                                 // priority states
                     sunlight: [],
                 });
-                for (let x = 0; x < cfg.inverter.length; x++) state.auto[index].inverter.push({ state: null, step: time.epoch, nightMode: false, });
+                for (let x = 0; x < cfg.inverter.length; x++) state.auto[index].inverter.push({ state: null, step: time.epoch - 10, nightMode: false, });
                 for (let x = 0; x < cfg.solar.priority.length; x++) state.auto[index].priority.push(null);
                 setInterval(() => { automation[index](index); }, 1e3);      // set minimum rerun time, otherwise this automation function will only on ESP and HA events
                 setInterval(() => { checkRoomTemp(); }, 1e3);
