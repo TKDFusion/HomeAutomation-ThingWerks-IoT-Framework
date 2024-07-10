@@ -549,7 +549,7 @@ if (isMainThread) {
                         break;
                     case 1:     // read nv.json file
                         console.log("Initializing workers");
-                        if (cfg.esp && cfg.esp.enable == true) {               // load worker threads
+                        if (cfg.esp != undefined && cfg.esp.enable == true) {               // load worker threads
                             console.log("ESP thread initiating...");
                             cfg.esp.devices.forEach((_, x) => {
                                 thread.esp.push(new Worker(__filename, { workerData: { esp: x } }));
@@ -942,7 +942,7 @@ if (!isMainThread) {
             init: function () {
                 cfg = {};
                 client = null;
-                state = { entity: [], reconnect: false, boot: false, rssi: false };
+                state = { entity: [], reconnect: false, boot: false, rssi: false, errorResetTimeout: null };
                 sys.lib();
             },
             lib: function () {
@@ -979,25 +979,28 @@ if (!isMainThread) {
         const { Client } = require('@2colors/esphome-native-api');
         //     const { Discovery } = require('@2colors/esphome-native-api');
         sys.init();
-        function espInit() {
-            if (client) {
-                log("stagnant esp client found: " + a.color("white", cfg.esp.devices[workerData.esp].ip) + ", removing...", 1);
+        function espReset() {
+            try { client.disconnect(); } catch (error) { log("ESP disconnect failed...", 2); }
+            setTimeout(() => {
                 em.removeAllListeners();
-                //   client.removeAllListeners();
-                try { client.disconnect(); } catch (error) { log("ESP disconnect failed...", 2); }
-                client = null;
-            }
+                setTimeout(() => {
+                    client = null;
+                    espInit();
+                }, 1e3);
+            }, 3e3);
+        }
+        function espInit() {
             client = new Client({
                 host: cfg.esp.devices[workerData.esp].ip,
                 port: 6053,
                 encryptionKey: cfg.esp.devices[workerData.esp].key,
-                reconnect: true,
-                reconnectInterval: 5000,
+                //   reconnect: false,
+                //   reconnectInterval: 5000,
                 pingInterval: 3000,
                 pingAttempts: 3,
-                tryReconnect: false,
+                //   tryReconnect: false,
             });
-            setTimeout(() => { clientConnect(); }, 500);
+            try { clientConnect(); } catch (error) { log(error) };
         }
         function clientConnect() {
             if (state.reconnect == false) {
@@ -1011,12 +1014,14 @@ if (!isMainThread) {
                     state.reconnect = true;
                     state.rssi = true;
                 }
-                espInit();                                                        // if there's a connection problem, start reset sequence
+                // consider removeing this line if still issues, disconnect might be enough and also it may use its own reconnect
+                // state.errorResetTimeout = setTimeout(() => { espInit(); }, 3e3); // if there's a connection problem, start reset sequence
+                espReset();
             });
             client.on('disconnected', () => {
                 log(`Disconnected from ESP module: ${a.color("white", cfg.esp.devices[workerData.esp].ip)}`, 2);
                 // clearTimeout(state.errorResetTimeout);
-                // handleReconnection();
+                //  espInit();
             });
             client.on('newEntity', data => {
                 if (state.reconnect == true) log("ESP module is reconnected: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 0)
@@ -1032,7 +1037,8 @@ if (!isMainThread) {
                 if (data.type === "Switch") {                                 // if this is a switch, register the emitter
                     em.on(data.config.objectId, function (id, state) {        // emitter for this connection 
                         // log("setting entity: " + id + " to " + state, 0, 0)
-                        try { data.connection.switchCommandService({ key: id, state: state }); } catch (e) { log("error sending command to ESP - " + e, 2, 3); } // reset() was removed from here
+                        try { data.connection.switchCommandService({ key: id, state: state }); }
+                        catch (e) { log("error sending command to ESP - " + e, 2, 3); } // reset() was removed from here
                     });
                 }
                 data.on('state', (update) => {
@@ -1054,7 +1060,7 @@ if (!isMainThread) {
                     }
                 });
             });
-            client.connect();
+            try { client.connect(); } catch (error) { log("client connect error: " + error) };
         }
         parentPort.on('message', (data) => {
             //   console.log(data.obj);
