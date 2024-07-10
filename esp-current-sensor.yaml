@@ -1,0 +1,63 @@
+esphome:
+  name: esp-test
+  friendly_name: ESP-Test
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+logger:
+api:
+  encryption:
+    key: "myKey"
+ota:
+  platform: esphome
+  password: "myPass"
+wifi:
+  networks:
+  - ssid: WiFi-LTH
+  - ssid: WiFi-Couryard
+  - ssid: "Ugyon-Sipalay❤️Free-WiFi"
+  manual_ip:
+    static_ip: 10.10.1.245
+    gateway: 10.10.0.1
+    subnet: 255.255.224.0 
+  output_power: 20dB
+  power_save_mode: none
+uart: # Enable UART bus
+  tx_pin: GPIO26
+  rx_pin: GPIO25
+  baud_rate: 9600
+  stop_bits: 1
+  parity: NONE
+  id: uart_modbus
+modbus: # Enable Modbus
+  id: modbus1
+  uart_id: uart_modbus
+modbus_controller: # Modbus Controller
+  - id: modbus_ctrl1
+    address: 0x01
+    update_interval: 100ms
+sensor: # Modbus Sensor
+  - platform: modbus_controller
+    modbus_controller_id: modbus_ctrl1
+    name: "Current Sensor"
+    id: current_sensor
+    register_type: holding
+    address: 0x0056
+    value_type: U_WORD
+    filters:
+      - lambda: |-
+          float offset_points = 15;  // The number of points the zero calibration is off
+          float zero_calibration = 5000 + offset_points;  // Calculated zero calibration point
+          float raw = x - zero_calibration;
+          float range = 500.0;  // The measurement range of your sensor
+          float positive_range = 10000 - zero_calibration;
+          float negative_range = zero_calibration;
+          if (raw < 0) {
+            return raw * (range / negative_range);
+          } else {
+            return raw * (range / positive_range);
+          }
+      - sliding_window_moving_average:
+          window_size: 10
+          send_every: 10  # Send averaged result every 10 samples (every 1000ms) 
