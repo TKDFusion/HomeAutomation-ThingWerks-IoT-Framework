@@ -16,6 +16,7 @@ let
         (index, clock) => {                                                 // local time: time.sec, time.min, time.hour, time.mil  --  time.epoch, time.epochMin (epoch times)
             if (!state.auto[index]) init();                                 // initialize automation
             let st = state.auto[index];                                     // set automation state object's shorthand name to "st" (state) 
+
             function init() {
                 state.auto.push({                                           // create object for this automation in local state
                     name: "Auto-System",                                    // give this automation a name 
@@ -25,10 +26,12 @@ let
                 log("system started", index, 1);                            // log automation start with index number and severity (0: debug, 1:event, 2: warning, 3: error)
                 em.on("input_button.test", () => button.test());            // create an event emitter for HA or ESP entity that calls a function when data is received
                 em.on("power1-relay1", (newState) => {                      // an event emitter for HA or ESP device that directly performs a function
-                    log("my esp toggle function", index, 1);     
+                    log("my esp toggle function", index, 1);
                 });
                 send("coreData", { register: true, name: "myObject" });     // register with core to receive data from other client
             }
+
+
             let button = {                                                  // example methods of toggling ESP or Home Assistant entities and sensors
                 test: function () {                                         // example object member function called by emitter
                     ha.send("switch.fan_exhaust_switch", false);            // different methods to set state of HA and ESP entities
@@ -53,7 +56,20 @@ let
                 st.example.started = true;                                  // set automation state variable
             }
 
-            if (clock) {                                                    // set events to run at a specific time using clock function. match hour and minute of day, etc
+            /*      Time Variables   -  add DOW? sent by core?
+                time.mil            current time milliseconds 
+                time.min            current minute
+                time.sec            current second
+                time.hour           current hour
+                time.day            current day of the month (ie 1-30)
+                time.boot           time elapsed from first boot in seconds
+                time.epoch          unix epoch time in seconds
+                time.epochMin       unix epoch time in minutes
+                time.epochMil       unix epoch time in milliseconds
+
+            */
+
+            if (clock) { // called once per minute   // set events to run at a specific time using clock function. match hour and minute of day, etc
                 var day = clock.day, dow = clock.dow, hour = clock.hour, min = clock.min;
                 if (hour == 18 && min == 0) {
                     log("turning on outside lights", index, 1);
@@ -231,7 +247,7 @@ let
             nv = {};
             state = { auto: [], ha: [], esp: [], coreData: [], onlineHA: false, onlineESP: false, online: false };
             time = {
-                mil: null, sec: null, min: null, hour: null, day: null, week: null, epoch: null, epochMin: null, epochMil: null,
+                mil: null, sec: null, min: null, hour: null, day: null, week: null, epoch: null, epochMin: null, epochMil: null, boot: 0,
                 sync: function () {
                     let date = new Date();
                     this.epoch = Math.floor(Date.now() / 1000);
@@ -377,7 +393,7 @@ let
                     break;
                 case 2:
                     state.online = true;
-                    setInterval(() => { send("heartBeat") }, 1e3);
+                    setInterval(() => { send("heartBeat"); time.boot++; }, 1e3);
                     if (cfg.ha) { send("haFetch"); confirmHA(); }
                     else setTimeout(() => { automation.forEach((func, index) => { func(index) }); }, 1e3);
                     if (cfg.esp) {
