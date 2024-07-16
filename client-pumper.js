@@ -13,6 +13,7 @@ let
             "input_boolean.auto_pump_pressure",
             "input_boolean.auto_solar",
             "input_boolean.auto_pump_pressure_turbo",
+            "input_boolean.auto_fountain",
         ],
         esp: [
             "lth-tank",
@@ -26,6 +27,8 @@ let
             "uth-pump",
             "flow-lth-submersible",  // 9 
             "flow-uth-pump",
+            "flow-fountain-pump",
+            "fountain-relay1",
         ],
         dd: [       // config for the Demand/Delivery automation function, 1 object for each DD system
             {   // DD system example
@@ -119,7 +122,7 @@ let
                 },
                 flow: {                 // object must be declared
                     id: 1,      // flow sensor number (in cfg.flow block)
-                    startWarn: 15,          // min start flow before triggering notification (useful for filters)
+                    startWarn: 10,          // min start flow before triggering notification (useful for filters)
                     startError: 2,         // minimum flow rate pump must reach at start
                     startWait: 6,           // seconds to wait before checking flow after pump starts
                 },
@@ -170,6 +173,16 @@ let
                 pressureRating: 174,    // max rated pressure of transducer in PSI
             },
         ],
+        irrigation: [
+            {
+                name: "Fountain",
+                intervalOn: 6,
+                intervalOff: 90,
+                haAuto: 6,
+                pump: 12,
+
+            }
+        ],
         flow: [      // config for flow meters used with Home Assistant -- these flow meters get sent back to HA as sensors
             /*
             { size: "3/8", name: "Sea YF-S402C", pulse: 23.0, flow: ".3-10 LPM" },
@@ -195,35 +208,45 @@ let
                 id: 10,                 // HA or ESP ID number, corresponds to array number (zero indexed) 
                 pulse: 4.8,             // pulse calculation factor for your specific flow meter
                 unit: "m3",             // unit of measurement (cubic meters)
+            },
+            {   // flow meter 1 example
+                name: "flow_fountain",  // flow meter name that will appear in HA as a sensor (do not use spaces or dash, underscore only)
+                type: "esp",            // the sensor is "ha" or "esp" 
+                id: 11,                 // HA or ESP ID number, corresponds to array number (zero indexed) 
+                pulse: .45,             // pulse calculation factor for your specific flow meter
+                unit: "m3",             // unit of measurement (cubic meters)
             }
         ],
     },
     automation = [
-        (index, clock) => {
+        (index) => {
             /*
             does flow/pressure fault remain true after auto is shut down? Solar automation needs to read fault statue
+
+            irrigation advanced time window - coordinate with solar power profile - fault run time 
+            solar foutain controls auto, when low sun, auto fountain resumes with pump stopped (fail safe)
+
             */
             if (state.auto[index] == undefined) init();
-            if (clock) {    // called every minute
-                var day = clock.day, dow = clock.dow, hour = clock.hour, min = clock.min;
-                if (hour == 7 && min == 0) {
+            function timer() {    // called every minute
+                if (time.hour == 7 && time.min == 0) {
                     for (let x = 0; x < cfg.dd.length; x++) { state.auto[index].dd[x].warn.flowDaily = false; } // reset low flow daily warning
                     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_pump_pressure", true);
                     //     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", true);
                 }
-                if (hour == 8 && min == 30) {
+                if (time.hour == 8 && time.min == 30) {
                     //     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_pump_transfer", true);
                 }
-                if (hour == 9 && min == 30) { ha.send("input_boolean.auto_pump_pressure_turbo", true); }
-                if (hour == 14 && min == 30) { ha.send("input_boolean.auto_pump_pressure_turbo", false); }
-                if (hour == 18 && min == 0) {
+                if (time.hour == 9 && time.min == 30) { ha.send("input_boolean.auto_pump_pressure_turbo", true); }
+                if (time.hour == 14 && time.min == 30) { ha.send("input_boolean.auto_pump_pressure_turbo", false); }
+                if (time.hour == 18 && time.min == 0) {
                     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_compressor", false);
                     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_pump_transfer", false);
                 }
-                if (hour == 19 && min == 30 || hour == 21 && min == 0) {
+                if (time.hour == 19 && time.min == 30 || time.hour == 21 && time.min == 0) {
                     if (state.ha[cfg.dd[0].ha.timer] == true) ha.send("input_boolean.auto_pump_pressure", false);
                 }
-                if (hour == 22 && min == 0) {
+                if (time.hour == 22 && time.min == 0) {
                     log("resetting daily flow meters", index, 1)
                     for (let x = 0; x < cfg.flow.length; x++) nv.flow[x].today = 0; // reset daily low meters
                 }
@@ -231,7 +254,30 @@ let
                 file.write.nv();
                 for (let x = 0; x < cfg.dd.length; x++) { state.auto[index].dd[x].warn.flowFlush = false; }
             }
+            irrigation();
             for (let x = 0; x < cfg.dd.length; x++) { pumpControl(x) } // enumerate every demand delivery instance
+            function irrigation() {
+                if (state.ha[cfg.irrigation[0].haAuto] == true) {
+                    if (state.auto[index].irrigation[0].step == null) {
+                        log(cfg.irrigation[0].name + " is turning on", index, 1);
+                        esp.send(cfg.esp[cfg.irrigation[0].pump], true);
+                        state.auto[index].irrigation[0].step = time.epochMin;
+                    }
+                    if (state.esp[cfg.irrigation[0].pump] == true) {
+                        if (time.epochMin - state.auto[index].irrigation[0].step >= cfg.irrigation[0].intervalOn) {
+                            log(cfg.irrigation[0].name + " is turning off", index, 1);
+                            esp.send(cfg.esp[cfg.irrigation[0].pump], false);
+                            state.auto[index].irrigation[0].step = time.epochMin;
+                        }
+                    } else {
+                        if (time.epochMin - state.auto[index].irrigation[0].step >= cfg.irrigation[0].intervalOff) {
+                            log(cfg.irrigation[0].name + " is turning back on", index, 1);
+                            esp.send(cfg.esp[cfg.irrigation[0].pump], true);
+                            state.auto[index].irrigation[0].step = time.epochMin;
+                        }
+                    }
+                }
+            }
             function pumpControl(x) {
                 for (let x = 0; x < cfg.dd.length; x++) {
                     let dd = state.auto[index].dd[x];
@@ -519,7 +565,7 @@ let
             }
             function init() {
                 state.auto.push({               // initialize automation volatile memory
-                    name: "Pumper", dd: [], flow: [], press: [], ha: { pushLast: [] },
+                    name: "Pumper", dd: [], flow: [], press: [], ha: { pushLast: [] }, irrigation: []
                 });
                 if (cfg.flow != undefined) {
                     if (nv.flow == undefined) {             // initialize flow meter NV memory if no NV data
@@ -542,6 +588,9 @@ let
                     for (let x = 0; x < cfg.press.length; x++) {
                         state.auto[index].press.push({ raw: [], step: 0, meters: null, psi: null, percent: null, volts: null, })
                     }
+                }
+                for (let x = 0; x < cfg.irrigation.length; x++) {
+                    state.auto[index].irrigation.push({ step: null, })
                 }
                 for (let x = 0; x < cfg.dd.length; x++) {
                     log(cfg.dd[x].name + " - initializing", index, 1);
@@ -615,6 +664,7 @@ let
                     calcFlow();
                     pushSensor();
                 }, 1e3);
+                setInterval(() => { timer(); }, 60e3);
                 emitters();
             }
             function pushSensor() {
@@ -676,7 +726,7 @@ let
                     if (cfg.flow[x].type == "esp") state.auto[index].flow[x].lm = state.esp[cfg.flow[x].id] / cfg.flow[x].pulse / 60;
                     else state.auto[index].flow[x].lm = state.ha[cfg.flow[x].id] / cfg.flow[x].pulse / 60;
                     if (!isNaN(parseFloat(state.auto[index].flow[x].lm)) == true && isFinite(state.auto[index].flow[x].lm) == true && state.auto[index].flow[x].lm != null) {
-                        if (nv.flow[x] == undefined) nv.flow[x] = { total: 0, min: [], hour: [], day: [] }
+                        if (nv.flow[x] == undefined) nv.flow[x] = { total: 0, today: 0, min: [], hour: [], day: [] }
                         nv.flow[x].total += state.auto[index].flow[x].lm / 60 / 1000;
                         nv.flow[x].today += state.auto[index].flow[x].lm / 60;
                     }
@@ -690,18 +740,18 @@ let
                         calcFlow = nv.flow[x].total - state.auto[index].flow[x].temp;
                         state.auto[index].flow[x].temp = nv.flow[x].total;
                     }
-                    nv.flow[x].min[min] = calcFlow;
+                    nv.flow[x].min[time.min] = calcFlow;
 
                     nv.flow[x].min.forEach((y) => calcHour += y);
                     state.auto[index].flow[x].hour = calcHour;
 
-                    for (let y = 0; y <= min; y++) calcDay += nv.flow[x].min[y];
+                    for (let y = 0; y <= time.min; y++) calcDay += nv.flow[x].min[y];
                     nv.flow[x].hour.forEach((y) => calcDay += y);
-                    calcDay = calcDay - nv.flow[x].hour[hour];
+                    calcDay = calcDay - nv.flow[x].hour[time.hour];
                     state.auto[index].flow[x].day = calcDay;
 
                     for (let y = 0; y < 60; y++) hourNV += nv.flow[x].min[y];
-                    nv.flow[x].hour[hour] = hourNV;
+                    nv.flow[x].hour[time.hour] = hourNV;
                 }
             }
             function emitters() {
@@ -714,12 +764,19 @@ let
                         cfg.press[2].start = 18; cfg.press[2].stop = 22;
                     }
                 });
-                em.on("input_boolean.test", (newState) => {
-                    log("Test Emitter", index, 1);
+                em.on("input_boolean.auto_fountain", (newState) => {
+                    if (newState == true) {
+                        log(cfg.irrigation[0].name + " is turning on", index, 1);
+                        esp.send(cfg.esp[cfg.irrigation[0].pump], true);
+                        state.auto[index].irrigation[0].step = time.epochMin;
+                    } else {
+                        log(cfg.irrigation[0].name + " is turning permanently", index, 1);
+                        esp.send(cfg.esp[cfg.irrigation[0].pump], false);
+                    }
                 });
             }
         },
-        (index, clock) => {
+        (index) => {
             if (!state.auto[index]) {
                 state.auto[index] = {}
                 log("starting relay tester", 0, 0)
@@ -864,12 +921,6 @@ let
                                     break;
                             }
                             break;
-                        case "timer":
-                            let timeBuf = { day: buf.obj.day, dow: buf.obj.dow, hour: buf.obj.hour, min: buf.obj.min };
-                            if (state.online == true) {
-                                automation.forEach((func, index) => { if (state.auto[index]) func(index, timeBuf) });
-                            }
-                            break;
                         case "log": console.log(buf.obj); break;
                     }
                 }
@@ -893,7 +944,7 @@ let
             nv = {};
             state = { auto: [], ha: [], esp: [], coreData: [], onlineHA: false, onlineESP: false, online: false };
             time = {
-                mil: null, sec: null, min: null, hour: null, day: null, week: null, epoch: null, epochMin: null, epochMil: null,
+                mil: null, sec: null, min: null, hour: null, day: null, week: null, epoch: null, epochMin: null, epochMil: null, boot: 0,
                 sync: function () {
                     let date = new Date();
                     this.epoch = Math.floor(Date.now() / 1000);
@@ -1039,7 +1090,7 @@ let
                     break;
                 case 2:
                     state.online = true;
-                    setInterval(() => { send("heartBeat") }, 1e3);
+                    setInterval(() => { send("heartBeat"); time.boot++; }, 1e3);
                     if (cfg.ha) { send("haFetch"); confirmHA(); }
                     else setTimeout(() => { automation.forEach((func, index) => { func(index) }); }, 1e3);
                     if (cfg.esp) {
