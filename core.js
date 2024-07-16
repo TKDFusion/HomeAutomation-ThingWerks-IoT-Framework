@@ -159,7 +159,7 @@ if (isMainThread) {
                                                                 log("HA (" + a.color("white", config.address) + "): ESP Module has gone offline: " + buf.event.data.new_state.entity_id + ibuf, 1, 2);
                                                         }
                                                         else if (!isNaN(parseFloat(Number(ibuf))) == true   // check if data is float
-                                                            && isFinite(Number(ibuf)) == true && Number(ibuf) != null) obuf = ibuf;
+                                                            && isFinite(Number(ibuf)) == true && ibuf != null) obuf = ibuf;
                                                         else if (ibuf.length == 32) { obuf = ibuf }         // button entity, its always 32 chars
                                                         else log("HA (" + a.color("white", config.address) + ") is sending bogus data = Entity: "
                                                             + buf.event.data.new_state.entity_id + " Bytes: " + ibuf.length + " data: " + ibuf, 1, 2);
@@ -360,9 +360,15 @@ if (isMainThread) {
                     case "coreData":      // incoming sensor state from clients
                         let exist = false;
                         if (buf.obj.register == true) {
-                            log("Client : " + state.udp[id].name == undefined ? id : state.udp[id].name + " is registering for CoreData updates", 3, 1);
+                            log("Client : " + state.udp[id].name == undefined ? id : state.udp[id].name
+                                + " is registering for CoreData updates", 3, 1);
                             if (state.udp[id].coreData == undefined) state.udp[id].coreData = [];
-                            state.udp[id].coreData.push(buf.obj.name)
+                            if (Array.isArray(buf.obj.name)) {
+                                log("Client : " + state.udp[id].name == undefined ? id : state.udp[id].name
+                                    + " is registering CoreData as an array, enumerating", 3, 1);
+                                buf.obj.name.forEach(element => { state.udp[id].coreData.push(element); });
+                            }
+                            else state.udp[id].coreData.push(buf.obj.name)
                         } else {
                             for (let x = 0; x < state.coreData.length; x++) {
                                 if (state.coreData[x].name == buf.obj.name) {
@@ -372,7 +378,8 @@ if (isMainThread) {
                                 }
                             }
                             if (exist == false) {     // a client is sending sensor data for the first time
-                                log("Client: " + (state.udp[id].name == undefined ? id : state.udp[id].name) + " - is populating CoreData: " + buf.obj.name, 3, 1);
+                                log("Client: " + (state.udp[id].name == undefined ? id : state.udp[id].name)
+                                    + " - is populating CoreData: " + buf.obj.name, 3, 1);
                                 state.coreData.push({ name: buf.obj.name, data: buf.obj.data });
                             }
                             for (let x = 0; x < state.udp.length; x++) {
@@ -548,16 +555,7 @@ if (isMainThread) {
                         });
                         break;
                     case 1:     // read nv.json file
-                        console.log("Initializing workers");
-                        if (cfg.esp != undefined && cfg.esp.enable == true) {               // load worker threads
-                            console.log("ESP thread initiating...");
-                            cfg.esp.devices.forEach((_, x) => {
-                                thread.esp.push(new Worker(__filename, { workerData: { esp: x } }));
-                                thread.esp[x].on('message', (data) => sys.ipc(data));
-                                thread.esp[x].postMessage({ type: "config", obj: cfg });
-                            });
-                        }
-                        sys.boot(2);
+                        sys.boot(2);  // core does not use nv data, bypassed
                         return;
                         console.log("Loading non-volatile data...");
                         fs.readFile(workingDir + "/nv.json", function (err, data) {
@@ -578,6 +576,18 @@ if (isMainThread) {
                         sys.checkArgs();
                         log("specified Working Directory: " + cfg.workingDir);
                         log("actual working directory: " + workingDir);
+                        if (cfg.esp != undefined && cfg.esp.enable == true) {               // load worker threads
+                            cfg.esp.devices.forEach((_, x) => { newWorker(x, true); });
+                            function newWorker(x, boot) {
+                                if (boot) log("initialing ESP thread: " + x);
+                                else log("re-initialing crashed ESP thread: " + x);
+                                thread.esp[x] = (new Worker(__filename, { workerData: { esp: x } }));
+                                thread.esp[x].on('message', (data) => sys.ipc(data));
+                                thread.esp[x].on('error', (error) => { log("ESP worker: " + x + " crashed", 0, 3); newWorker(x); });
+                                thread.esp[x].on('exit', (code) => { log("ESP worker: " + x + " exited", 0, 3); newWorker(x); });
+                                thread.esp[x].postMessage({ type: "config", obj: cfg });
+                            }
+                        }
                         if (cfg.webDiag) {
                             express.get("/el", function (request, response) { response.send(logs.esp); });
                             express.get("/log", function (request, response) { response.send(logs.sys); });
@@ -920,9 +930,6 @@ if (isMainThread) {
                     sys.watchDog(time.date);
                     function everyMin() {
                         if (time.hourLast != time.hour) { time.hourLast = time.hour; everyHour(); }
-                        for (let x = 0; x < state.udp.length; x++) {
-                            udp.send(JSON.stringify({ type: "timer", obj: { day: time.day, dow: time.dow, hour: time.hour, min: time.min } }), state.udp[x].port);
-                        }
                     }
                     function everyHour() {
                         if (time.dayLast != time.day) { time.dayLast = time.day; everyDay(); }
@@ -986,42 +993,47 @@ if (!isMainThread) {
                 setTimeout(() => {
                     client = null;
                     espInit();
-                }, 1e3);
-            }, 3e3);
+                }, 5e3);
+            }, 10e3);
         }
         function espInit() {
             client = new Client({
                 host: cfg.esp.devices[workerData.esp].ip,
                 port: 6053,
                 encryptionKey: cfg.esp.devices[workerData.esp].key,
-                //   reconnect: false,
-                //   reconnectInterval: 5000,
+                reconnect: true,
+                reconnectInterval: 5000,
                 pingInterval: 3000,
                 pingAttempts: 3,
-                //   tryReconnect: false,
+                tryReconnect: true,
             });
             try { clientConnect(); } catch (error) { log(error) };
         }
         function clientConnect() {
             if (state.reconnect == false) {
                 log("connecting to esp module: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2);       // client connection function, ran for each ESP device
-                setTimeout(() => { state.reconnect = false; }, 10e3);
+                setTimeout(() => { state.reconnect = false; }, 30e3);  // do we need to try reconnecting aftre 30 secs? need to know if already connected if so
             }
             client.on('error', (error) => {
                 // console.log(error);
                 if (state.reconnect == false) {
                     log("ESP module went offline, resetting ESP system: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 0);
                     state.reconnect = true;
-                    state.rssi = true;
+                    //  state.rssi = true;
+                    espReset();
                 }
                 // consider removeing this line if still issues, disconnect might be enough and also it may use its own reconnect
                 // state.errorResetTimeout = setTimeout(() => { espInit(); }, 3e3); // if there's a connection problem, start reset sequence
-                espReset();
             });
             client.on('disconnected', () => {
                 log(`Disconnected from ESP module: ${a.color("white", cfg.esp.devices[workerData.esp].ip)}`, 2);
                 // clearTimeout(state.errorResetTimeout);
                 //  espInit();
+                if (state.reconnect == false) {
+                    log("ESP module went offline, resetting ESP system: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 0);
+                    espReset();
+                    state.reconnect = true;
+                }
             });
             client.on('newEntity', data => {
                 if (state.reconnect == true) log("ESP module is reconnected: " + a.color("white", cfg.esp.devices[workerData.esp].ip), 2, 0)
@@ -1038,7 +1050,7 @@ if (!isMainThread) {
                     em.on(data.config.objectId, function (id, state) {        // emitter for this connection 
                         // log("setting entity: " + id + " to " + state, 0, 0)
                         try { data.connection.switchCommandService({ key: id, state: state }); }
-                        catch (e) { log("error sending command to ESP - " + e, 2, 3); } // reset() was removed from here
+                        catch (e) { log("error sending command to ESP - resetting...", 2, 3); espReset(); } // reset() was removed from here
                     });
                 }
                 data.on('state', (update) => {
